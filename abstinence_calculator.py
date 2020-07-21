@@ -61,6 +61,8 @@ class AbstinenceCalculator:
         if impute:
             self.impute_tlfb_data()
 
+            'hello'
+
     def validate_tlfb_data(self):
         needed_cols_ordered = ('id', 'date', 'amount')
         needed_cols_unordered = set(needed_cols_ordered)
