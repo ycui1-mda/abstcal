@@ -1,0 +1,13 @@
+,0
+record_count,3
+subject_count,297
+min_date,2016-02-03 00:00:00
+max_date,2019-07-15 00:00:00
+min_amount,0.0
+max_amount,80.0
+missing_subject_count,0
+missing_date_count,0
+missing_amount_count,0
+duplicate_count,1407
+outlier_low_count,16135
+outlier_high_count,10

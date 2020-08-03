@@ -2,39 +2,16 @@
 import os
 import warnings
 from enum import Enum
+from statistics import mean
+from collections import namedtuple
 from datetime import timedelta
 import pandas as pd
 import numpy as np
-from statistics import mean
-from collections import namedtuple
+from functools import partial
 
 # %%
-TLFBRecord = namedtuple("TLFBRecord", "id date amount")
+TLFBRecord = namedtuple("TLFBRecord", "id date amount imputation_code")
 VisitRecord = namedtuple("VisitRecord", "id visit date")
-
-
-def impute_tlfb_missing_block(start_record: TLFBRecord, end_record: TLFBRecord, impute="uniform"):
-    subject_id, start_date, start_amount = start_record
-    subject_id, end_date, end_amount = end_record
-    day_number = (end_date - start_date).days
-    imputed_records = []
-    if impute == "linear":
-        m = (end_amount - start_amount) / day_number
-        for i in range(1, day_number):
-            imputed_date = start_date + timedelta(days=i)
-            imputed_amount = m * i + start_amount
-            imputed_records.append(TLFBRecord(subject_id, imputed_date, imputed_amount))
-    elif impute == "uniform":
-        imputed_amount = mean([start_amount, end_amount])
-        for i in range(1, day_number):
-            imputed_date = start_date + timedelta(days=i)
-            imputed_records.append(TLFBRecord(subject_id, imputed_date, imputed_amount))
-    else:
-        imputed_amount = float(impute)
-        for i in range(1, day_number):
-            imputed_date = start_date + timedelta(days=i)
-            imputed_records.append(TLFBRecord(subject_id, imputed_date, imputed_amount))
-    return imputed_records
 
 
 # %%
@@ -97,193 +74,474 @@ class AbstinenceCalculator:
     def __init__(self, tlfb_filepath, visit_filepath, abst_cutoff=0):
         """
         Create an instance object to calculate abstinence
-        :param tlfb_filepath: filepath for the TLFB data in the tabular format, str or pathlib.Path
-        :param visit_filepath: filepath for the visit data in the tabular format, str or pathlib.Path
-        :param abst_cutoff: The cutoff of abstinence, default=0, inclusive, for example if the cutoff is 0.1 then 0.1
-        and below is considered abstinent
+        :param tlfb_filepath: Union[str, Path]
+            The filepath for the TLFB dataset, the dataset should have id, date, and amount columns
+        :param visit_filepath: Union[str, Path]
+            The filepath for the visit dataset, the dataset should have id, visit, and date columns
+        :param abst_cutoff: Union[int, float], default 0
+            The cutoff for abstinence, below or equal to which is considered to be abstinent
         """
-        self._tlfb_data = read_data_from_path(tlfb_filepath)
-        self._visit_data = read_data_from_path(visit_filepath)
+        self.subject_ids, self.tlfb_data = AbstinenceCalculator._validated_tlfb_data_from_source(tlfb_filepath)
+        self.visits, self.visit_data = AbstinenceCalculator._validated_visit_data_from_source(visit_filepath)
         self.abst_cutoff = abst_cutoff
-        self._tlfb_data_imputed = None
-        self._visit_data_imputed = None
+        self.tlfb_data_imputed = None
+        self.visit_data_imputed = None
         self._tlfb_duplicates = None
         self._visit_duplicates = None
-        self._subject_ids = None
+        self._visit_data_wide = None
 
-    @classmethod
-    def read_data(cls, tlfb_filepath, visit_filepath, impute_tlfb="linear", impute_visit="mean", abst_cutoff=0):
-        """
-        Create an instance object by reading and processing data in a single combined step
-        :param tlfb_filepath: filepath for the TLFB data in the tabular format, str or pathlib.Path
-        :param visit_filepath: filepath for the visit data in the tabular format, str or pathlib.Path
-        :param impute_tlfb:
-        :param impute_visit:
-        :param abst_cutoff: The cutoff of abstinence, default=0, inclusive, for example if the cutoff is 0.1 then 0.1
-        and below is considered abstinent
-        :return: an instance object for AbstinenceCalculator class
-        """
-        calculator = cls(tlfb_filepath, visit_filepath)
-        calculator.abst_cutoff = abst_cutoff
-        calculator.prepare_tlfb_data(impute_tlfb)
-        calculator.prepare_visit_data(impute_visit)
-        return calculator
+    @staticmethod
+    def _validated_tlfb_data_from_source(tlfb_filepath):
+        tlfb_data = read_data_from_path(tlfb_filepath)
+        _validate_columns(tlfb_data, ('id', 'date', 'amount'), "TLFB", "id, date, and amount")
+        tlfb_data['date'] = pd.to_datetime(tlfb_data['date'], infer_datetime_format=True)
+        tlfb_data['amount'] = tlfb_data['amount'].astype(float)
+        subject_ids = set(tlfb_data['id'].unique())
+        return subject_ids, tlfb_data
 
-    def prepare_tlfb_data(self, impute="uniform"):
+    @staticmethod
+    def _validated_visit_data_from_source(visit_filepath):
+        visit_data = read_data_from_path(visit_filepath)
+        _validate_columns(visit_data, ('id', 'visit', 'date'), "visit", "id, visit, and date")
+        visit_data['date'] = pd.to_datetime(visit_data['date'], infer_datetime_format=True)
+        visits = set(visit_data['visit'].unique())
+        return visits, visit_data
+
+    def profile_tlfb_data(self, min_amount_cutoff=None, max_amount_cutoff=None, print_report=True,
+                          sample_summary_filename=None, subject_summary_filename=None):
         """
-        Prepare the TLFB data to make them ready for abstinence calculation
-        :param impute: How the missing TLFB data are imputed, None means no imputations.
-        Supported options:
+        Profile the TLFB data
+        :param min_amount_cutoff: Union[None, int, float], default None
+            The minimal amount allowed for the consumption, lower than that is considered to be an outlier
+            when it's set None, outlier detection won't consider the lower bound
+        :param max_amount_cutoff: Union[None, int, float], default None
+            The maximal amount allowed for the consumption, higher than that is considered to be an outlier
+            when it's set None, outlier detection won't consider the higher bound
+        :param print_report: bool, default True
+            Whether to print the summary report to the console
+        :param sample_summary_filename: Union[str, Path, None], default None
+            The sample summary's output filename or path
+        :param subject_summary_filename: Union[str, Path, None], default None
+            The subject summary's output filename or path
+        :return: None
+        """
+        tlfb_summary_series = self._get_tlfb_sample_summary(min_amount_cutoff, max_amount_cutoff)
+        tlfb_subject_summary = self._get_tlfb_subject_summary(min_amount_cutoff, max_amount_cutoff)
+        _print_report_to_console(print_report, ['TLFB Data Summary - Entire Sample', 'TLFB Data Summary - By Subject'],
+                                 [tlfb_summary_series, tlfb_subject_summary])
+        if sample_summary_filename:
+            tlfb_summary_series.to_csv(sample_summary_filename, header=False)
+        if subject_summary_filename:
+            tlfb_subject_summary.to_csv(subject_summary_filename)
+
+    def _get_tlfb_sample_summary(self, min_amount_cutoff, max_amount_cutoff):
+        tlfb_summary = {'record_count': self.tlfb_data.shape[0]}
+        key_names = 'subject_count min_date max_date min_amount max_amount'.split()
+        col_names = 'id date date amount amount'.split()
+        func_names = 'nunique min max min max'.split()
+        for key_name, col_name, func_name in zip(key_names, col_names, func_names):
+            func = getattr(pd.Series, func_name)
+            tlfb_summary[key_name] = func(self.tlfb_data[col_name])
+
+        count_key_names = 'missing_subject_count missing_date_count missing_amount_count duplicate_count'.split()
+        columns = [self.tlfb_data['id'].isna(),
+                   self.tlfb_data['date'].isna(),
+                   self.tlfb_data['amount'].isna(),
+                   self.tlfb_data.duplicated(['id', 'date'], keep=False)]
+        if min_amount_cutoff is not None:
+            count_key_names.append('outlier_amount_low_count')
+            columns.append(pd.Series(self.tlfb_data['amount'] < min_amount_cutoff))
+        if max_amount_cutoff is not None:
+            count_key_names.append('outlier_amount_high_count')
+            columns.append(pd.Series(self.tlfb_data['amount'] > max_amount_cutoff))
+        for key_name, column in zip(count_key_names, columns):
+            tlfb_summary[key_name] = column.sum()
+        return pd.Series(tlfb_summary)
+
+    def _get_tlfb_subject_summary(self, min_amount_cutoff, max_amount_cutoff):
+        tlfb_dates_amounts = self.tlfb_data.groupby('id').agg({
+            "date": ["count", "min", "max"],
+            "amount": ["min", "max", "mean"]
+        })
+        summary_dfs = [tlfb_dates_amounts]
+        col_names = ['record_count', 'date_min', 'date_max', 'amount_min', 'amount_max',
+                     'amount_mean', 'duplicates_count']
+        summary_dfs.append(self.tlfb_data.loc[self.tlfb_data.duplicated(['id', 'date'], keep=False), :].groupby(
+            'id')['amount'].agg('count'))
+        if min_amount_cutoff is not None:
+            summary_dfs.append(self.tlfb_data.loc[self.tlfb_data['amount'] < min_amount_cutoff, :].groupby(
+                'id')['amount'].agg('count'))
+            col_names.append('outliers_low_count')
+        if max_amount_cutoff is not None:
+            summary_dfs.append(self.tlfb_data.loc[self.tlfb_data['amount'] > max_amount_cutoff, :].groupby(
+            'id')['amount'].agg('count'))
+            col_names.append('outliers_high_count')
+        summary_df = pd.concat(summary_dfs, axis=1)
+        summary_df.columns = col_names
+        return summary_df.fillna(0)
+
+    def recode_tlfb_abnormality(self, floor_amount=None, ceil_amount=None, duplicate_kept="min"):
+        """
+        Recode the abnormal data of the TLFB dataset
+        :param floor_amount: Union[None, int, float], default None
+            Recode values lower than the floor amount to the floor amount.
+            When None, no replacement will be performed
+        :param ceil_amount: Union[None, int, float], default None
+            Recode values higher than the ceil amount to the ceil amount.
+            When None, no replacement will be performed
+        :param duplicate_kept: str, supported options: "min", "max", "mean", False
+            Specify which duplicate record to keep
+            When False, no duplicates will be kept
+        :return: TLFB data sorted by id and date
+        """
+        _validate_duplicate_arg_options(duplicate_kept)
+        self.tlfb_data = _drop_na_records(self.tlfb_data)
+        self.tlfb_data['amount'] = self.tlfb_data['amount'].map(partial(_recode_value, floor_amount, ceil_amount))
+        self._tlfb_duplicates, self.tlfb_data = \
+            AbstinenceCalculator._drop_duplicates(self.tlfb_data, ['id', 'date'], 'amount',
+                                                  duplicate_kept, 'get_tlfb_duplicates')
+
+    def profile_visit_data(self, min_date_cutoff=None, max_date_cutoff=None, expected_visit_order="inferred",
+                           print_report=True, sample_summary_filename=None, subject_summary_filename=None):
+        """
+        Profile the visit data
+        :param min_date_cutoff: Union[None, datetime, str], default None
+            The minimal date allowed for the visit's date, lower than that is considered to be an outlier
+            When it's set None, outlier detection won't consider the lower bound
+            When it's str, it should be able to be casted to a datetime object
+        :param max_date_cutoff: Union[None, datetime, str], default None
+            The maximal amount allowed for the consumption, higher than that is considered to be an outlier
+            When it's set None, outlier detection won't consider the higher bound
+            When it's str, it should be able to be casted to a datetime object
+        :param expected_visit_order: Union["inferred", list, None], default "inferred"
+            The expected order of the visits, such that when dates are out of order can be detected
+            The list of visit names should match the actual visits in the dataset
+            When None, no checking will be performed
+            The default is inferred, which means that the order of the visits is sorted based on its numeric or
+            alphabetic order
+        :param print_report: bool, default True
+            Whether to print the summary report to the console
+        :param sample_summary_filename: Union[str, Path, None], default None
+            The sample summary's output filename or path
+        :param subject_summary_filename: Union[str, Path, None], default None
+            The subject summary's output filename or path
+        :return: None
+        """
+        casted_min_date_cutoff = pd.to_datetime(min_date_cutoff, infer_datetime_format=True)
+        casted_max_date_cutoff = pd.to_datetime(max_date_cutoff, infer_datetime_format=True)
+        visit_summary_series = self._get_visit_sample_summary(casted_min_date_cutoff, casted_max_date_cutoff)
+        visit_subject_summary = self._get_visit_subject_summary(casted_min_date_cutoff, casted_max_date_cutoff,
+                                                                expected_visit_order)
+        _print_report_to_console(print_report, ['Visit Data Summary - Entire Sample', 'Visit Data Summary - By Subject'],
+                                 [visit_summary_series, visit_subject_summary])
+        if sample_summary_filename:
+            visit_summary_series.to_csv(sample_summary_filename, header=False)
+        if subject_summary_filename:
+            visit_subject_summary.to_csv(subject_summary_filename)
+
+    def _get_visit_sample_summary(self, min_date_cutoff, max_date_cutoff):
+        visit_summary = {'record_count': self.visit_data.shape[0]}
+        key_names = 'subject_count visit_count distinct_visits min_date max_date'.split()
+        col_names = 'id visit visit date date'.split()
+        func_names = 'nunique nunique unique min max'.split()
+        for key_name, col_name, func_name in zip(key_names, col_names, func_names):
+            func = getattr(pd.Series, func_name)
+            visit_summary[key_name] = func(self.visit_data[col_name])
+
+        count_key_names = 'missing_subject_count missing_visit_count missing_date_count duplicate_count'.split()
+        columns = [self.visit_data['id'].isna(),
+                   self.visit_data['visit'].isna(),
+                   self.visit_data['date'].isna(),
+                   self.visit_data.duplicated(['id', 'visit'], keep=False)]
+        if min_date_cutoff is not None:
+            count_key_names.append('outlier_date_low_count')
+            columns.append(pd.Series(self.visit_data['date'] < min_date_cutoff))
+        if max_date_cutoff is not None:
+            count_key_names.append('outlier_date_high_count')
+            columns.append(pd.Series(self.visit_data['date'] > max_date_cutoff))
+        for key_name, column in zip(count_key_names, columns):
+            visit_summary[key_name] = column.sum()
+
+        visit_record_counts = self.visit_data.groupby(['visit'])['date'].count().to_dict()
+        visit_summary.update({f"visit_{visit}_record_count": count for visit, count in visit_record_counts.items()})
+
+        return pd.Series(visit_summary)
+
+    def _get_visit_subject_summary(self, min_date_cutoff, max_date_cutoff, expected_visit_order):
+        visit_dates_amounts = self.visit_data.groupby('id').agg({
+            "date": ["count", "min", "max"]
+        })
+        summary_dfs = [visit_dates_amounts]
+        col_names = ['record_count', 'date_min', 'date_max', 'duplicates_count']
+        summary_dfs.append(self.visit_data.loc[self.visit_data.duplicated(['id', 'visit'], keep=False), :].groupby(
+            'id')['date'].agg('count'))
+        if min_date_cutoff is not None:
+            summary_dfs.append(self.visit_data.loc[self.visit_data['date'] < min_date_cutoff, :].groupby(
+                'id')['date'].agg('count'))
+            col_names.append('outliers_date_low_count')
+        if max_date_cutoff is not None:
+            summary_dfs.append(self.visit_data.loc[self.visit_data['date'] > max_date_cutoff, :].groupby(
+                'id')['date'].agg('count'))
+            col_names.append('outliers_date_high_count')
+        if expected_visit_order is not None:
+            if isinstance(expected_visit_order, list):
+                self.visit_data['visit'] = self.visit_data['visit'].map(
+                    {visit: i for i, visit in enumerate(expected_visit_order)}
+                )
+            elif isinstance(expected_visit_order, str) and expected_visit_order != 'inferred':
+                show_warning("Supported options for expected_visit_order are list of visits, None, and inferred. "
+                             "The expected visit order is inferred to check if the dates are in the correct order.")
+            sorted_visit_data = self.visit_data.sort_values(by=['id', 'visit']).reset_index()
+            sorted_visit_data['ascending'] = sorted_visit_data.groupby(['id'])['date'].diff().map(
+                lambda x: True if x is pd.NaT or x.days > 0 else False
+            )
+            visit_dates_out_of_order = sorted_visit_data.groupby(['id'])['ascending'].all().map(lambda x: not x)
+            summary_dfs.append(visit_dates_out_of_order)
+            col_names.append('visit_dates_out_of_order')
+            if visit_dates_out_of_order.sum() > 0:
+                show_warning(f"Please note that some subjects (n={visit_dates_out_of_order.sum()}) appear to have their "
+                             f"visit dates out of the correct order. You can find out who they are in the visit data"
+                             f"summary by subject. Please fix them if applicable.")
+        summary_df = pd.concat(summary_dfs, axis=1)
+        summary_df.columns = col_names
+        return summary_df.fillna(0)
+
+    def recode_visit_abnormality(self, floor_date=None, ceil_date=None, duplicate_kept="min"):
+        """
+        Recode the abnormal data of the TLFB dataset
+        :param floor_date: Union[None, int, float], default None
+            Recode values lower than the floor amount to the floor amount.
+            When None, no replacement will be performed
+        :param ceil_date: Union[None, int, float], default None
+            Recode values higher than the ceil amount to the ceil amount.
+            When None, no replacement will be performed
+        :param duplicate_kept: str, supported options: "min", "max", "mean", False
+            Specify which duplicate record to keep
+            When False, no duplicates will be kept
+        :return: None
+        """
+        _validate_duplicate_arg_options(duplicate_kept)
+        self.visit_data = _drop_na_records(self.visit_data)
+
+        casted_floor_date = pd.to_datetime(floor_date, infer_datetime_format=True)
+        casted_ceil_date = pd.to_datetime(ceil_date, infer_datetime_format=True)
+        self.visit_data['date'] = self.visit_data['date'].map(
+            partial(_recode_value, casted_floor_date, casted_ceil_date)
+        )
+        self._visit_duplicates, self.visit_data = \
+            AbstinenceCalculator._drop_duplicates(self.visit_data, ['id', 'visit'], 'date',
+                                                  duplicate_kept, 'get_visit_duplicates')
+
+    @staticmethod
+    def _drop_duplicates(df, by_keys, value_key, duplicate_kept, get_duplicate_method):
+        duplicated_indices = df.duplicated(by_keys, keep=False)
+        _duplicates = df.loc[duplicated_indices, :].copy().sort_values(by=by_keys).reset_index(drop=True)
+        duplicate_count = len(_duplicates)
+        if duplicate_count > 0:
+            show_warning(f"The Number of Duplicate Records by {by_keys[0]} and {by_keys[1]}: {duplicate_count}.\n"
+                         f"To review these duplicate records, you can use {get_duplicate_method}() method.")
+
+            sorting_order = [True, True, True]
+            if duplicate_kept == "max":
+                sorting_order[-1] = False
+
+            df.sort_values(by=[*by_keys, value_key], ascending=sorting_order, inplace=True)
+            if duplicate_kept in ("min", "max"):
+                df.drop_duplicates(by_keys, keep="first", inplace=True)
+            else:
+                df.drop_duplicates(by_keys, keep=False, inplace=True)
+                if duplicate_kept == "mean":
+                    _duplicates_means = _duplicates.groupby(by_keys)[value_key].mean().reset_index()
+                    df = pd.concat([df, _duplicates_means], axis=0)
+                    df.drop_duplicates(by_keys, keep="first", inplace=True)
+        else:
+            _duplicates = None
+        return _duplicates, df
+
+    def cross_validate_tlfb_visit_data(self, print_freq_report=True, output_filename=None):
+        tlfb_ids = pd.Series({subject_id: 'Yes' for subject_id in self.tlfb_data['id'].unique()}, name='TLFB Data')
+        visit_ids = pd.Series({subject_id: 'Yes' for subject_id in self.visit_data['id'].unique()}, name='Visit Data')
+        crossed_data = pd.concat([tlfb_ids, visit_ids], axis=1).fillna('No')
+        freq_data = crossed_data.groupby(['TLFB Data', 'Visit Data']).size().reset_index().\
+            rename({0: "subject_count"}, axis=1)
+        _print_report_to_console(print_freq_report, ['Data Availability'], [freq_data])
+        if output_filename:
+            crossed_data.index.name = 'subject_id'
+            crossed_data.to_csv(output_filename)
+
+    def impute_tlfb_data(self, impute="linear", show_impute_summary=True):
+        """
+        Impute the TLFB data
+        :param impute: Union["uniform", "linear", None, int, float], how the missing TLFB data are imputed
         1. None: no imputation
-        2. "uniform" (the default): impute the missing TLFB data using the mean value of the amounts before and after
+        2. "uniform": impute the missing TLFB data using the mean value of the amounts before and after
         the missing interval
-        3. "linear": impute the missing TLFB data by interpolating a linear trend based on the amounts before and after
+        3. "linear" (the default): impute the missing TLFB data by interpolating a linear trend based on the amounts before and after
         the missing interval
-        4. Numeric value: impute the missing TLFB data using a fixed value
+        4. Numeric value (int or float): impute the missing TLFB data using the specified value
+        :param show_impute_summary: bool, whether show the imputation summary report
         """
-        self.validate_tlfb_data()
-        self.remove_tlfb_duplicates()
-        self.sort_tlfb_data()
-        self._subject_ids = self._tlfb_data['id'].unique()
-        self._impute_tlfb_data(impute)
-
-    def validate_tlfb_data(self):
-        needed_cols_ordered = ('id', 'date', 'amount')
-        needed_cols_unordered = set(needed_cols_ordered)
-        current_cols_unordered = set(self._tlfb_data.columns)
-        if len(current_cols_unordered) != len(needed_cols_unordered):
-            raise FileFormatError('The TLFB data should have only id, date, and amount columns.')
-        if needed_cols_unordered != current_cols_unordered:
-            warning_message = """The TLFB data don't appear to have the needed columns: id, date, and amount. It has 
-            been renamed in such order for calculation purposes. If your columns aren't in this order, and you'll 
-            encounter errors in later calculation steps."""
-            show_warning(warning_message)
-            self._tlfb_data.columns = needed_cols_ordered
-        self._tlfb_data['date'] = pd.to_datetime(self._tlfb_data['date'], errors='coerce', infer_datetime_format=True)
-        self._tlfb_data['amount'] = self._tlfb_data['amount'].astype(float)
-        if (self._tlfb_data['amount'] < 0).any():
-            raise DataSourceQualityError("Fatal Error: the TLFB data have negative values.")
-
-    def remove_tlfb_duplicates(self):
-        self._tlfb_duplicates = self._tlfb_data.duplicated(['id', 'date'], keep=False)
-        if self._tlfb_duplicates is not None:
-            message = f"""The TLFB data have {len(self._tlfb_duplicates)} duplicates based on id and date. Extra 
-            duplicates will be removed in the calculation. To get the duplicates, use get_TLFB_duplicates()."""
-            show_warning(message)
-            self._tlfb_data.drop_duplicates(["id", "date"], inplace=True)
-
-    def sort_tlfb_data(self):
-        self._tlfb_data = self._tlfb_data.sort_values(by=["id", "date"]).reset_index(drop=True)
-
-    def get_tlfb_duplicates(self):
-        return self._tlfb_duplicates
-
-    def get_data_summary(self, outfile_name="TLFB_data_summary"):
-        summary_df = self._tlfb_data.groupby("id").agg({"date": ["min", "max", "count"], "amount": ["mean"]})
-        summary_df.columns = ['date_min', 'date_max', 'record_count', 'amount_mean']
-        summary_df.reset_index()
-        summary_df.to_csv(outfile_name + ".csv")
-
-    def _impute_tlfb_data(self, how_impute_tlfb):
-        if how_impute_tlfb is None or str(how_impute_tlfb).lower() == "none":
+        if impute is None or str(impute).lower() == "none":
             return
-        if not (how_impute_tlfb in ("uniform", "linear") or how_impute_tlfb.isnumeric()):
+        if not (impute in ("uniform", "linear") or impute.isnumeric()):
             raise InputArgumentError("The imputation mode can only be None, 'uniform', 'linear', "
                                      "or a numeric value.")
-        tlfb_df = self._tlfb_data.copy()
-        tlfb_df['diff_days'] = tlfb_df.groupby(['id'])['date'].diff().map(
-            lambda x: x.days if pd.notnull(x) else 1)
-        missing_data = tlfb_df[tlfb_df['diff_days'] > 1.0]
+        self.tlfb_data = self.tlfb_data.sort_values(by=['id', 'date']).reset_index(drop=True)
+        tlfb_df = self.tlfb_data.copy()
+        tlfb_df['imputation_code'] = TLFBImputationCode.RAW.value
+        missing_data = AbstinenceCalculator._get_tlfb_missing_data(tlfb_df)
+        if not len(missing_data):
+            self.tlfb_data_imputed = tlfb_df
+            show_warning("There is no missing TLFB data, and thus no imputation was performed.")
+            return self.tlfb_data_imputed
         imputed_records = []
         for row in missing_data.itertuples():
             start_data = tlfb_df.iloc[row.Index - 1]
-            start_record = TLFBRecord(start_data.id, start_data.date, start_data.amount)
-            end_record = TLFBRecord(row.id, row.date, row.amount)
-            imputed_records.extend(impute_tlfb_missing_block(start_record, end_record, impute=how_impute_tlfb))
+            start_record = TLFBRecord(start_data.id, start_data.date, start_data.amount, start_data.imputation_code)
+            end_record = TLFBRecord(row.id, row.date, row.amount, start_data.imputation_code)
+            imputed_records.extend(self._impute_tlfb_missing_block(start_record, end_record, impute=impute))
         tlfb_df.drop(['diff_days'], axis=1, inplace=True)
         imputed_tlfb_data = pd.DataFrame(imputed_records)
-        self._tlfb_data_imputed = pd.concat([self._tlfb_data, imputed_tlfb_data]).\
+        self.tlfb_data_imputed = pd.concat([tlfb_df, imputed_tlfb_data]). \
             sort_values(['id', 'date']).reset_index(drop=True)
-        message = f"The number of imputed records: {len(imputed_records)}"
-        show_warning(message)
-
-    def prepare_visit_data(self, impute="freq"):
-        """
-        Prepare the visit data ready for calculation.
-        :param impute: how the missing visits are imputed, None=no imputation, "freq"=use the most frequent,
-                        "mean"=use the average. Both imputation methods assume that the visit structure is the same
-                        among all subjects. It will first find the earliest visit as the anchor date, impute any missing
-                        visit dates either using the average or the most frequent interval. Please note the anchor dates
-                        can't be missing.
-        """
-        self.validate_visit_data()
-        self.remove_visit_duplicates_if_applicable()
-        self._impute_visit_data(impute)
-
-    def validate_visit_data(self):
-        needed_cols_ordered = ('id', 'visit', 'date')
-        needed_cols_unordered = set(needed_cols_ordered)
-        current_cols_unordered = set(self._visit_data.columns)
-        if len(current_cols_unordered) != len(needed_cols_unordered):
-            raise FileFormatError('The visit data should have only id, visit, and date columns.')
-        if needed_cols_unordered != current_cols_unordered:
-            warning_message = """The visit data don't appear to have the needed columns: id, visit, and date. It has 
-                    been renamed in such order for calculation purposes. If your columns aren't in this order, and 
-                    you'll encounter errors in later calculation steps."""
-            show_warning(warning_message)
-            self._visit_data.columns = needed_cols_ordered
-        self._visit_data['date'] = pd.to_datetime(self._visit_data['date'], errors='coerce', infer_datetime_format=True)
-        self._visit_data['visit'] = self._visit_data['visit'].map(lambda x: 'v' + str(x))
-
-        unique_TLFB_ids = set(self._tlfb_data['id'].unique())
-        unique_visit_ids = set(self._visit_data['id'].unique())
-        no_visit_ids = unique_TLFB_ids - unique_visit_ids
-        if no_visit_ids:
-            message = f"The visit data don't have the visit information for some subjects. Those subjects " \
-                      f"({no_visit_ids}) who don't visit data can't be scored."
+        if show_impute_summary:
+            impute_summary = self.tlfb_data_imputed.groupby(['imputation_code']).size().reset_index().\
+                rename({0: "record_count"}, axis=1)
+            impute_summary['imputation_code'] = impute_summary['imputation_code'].map(
+                lambda x: TLFBImputationCode(x).name
+            )
+            _print_report_to_console(True, ['TLFB Imputation Summary'], [impute_summary])
+        else:
+            message = f"The number of imputed records: {len(imputed_records)}"
             show_warning(message)
 
-    def remove_visit_duplicates_if_applicable(self):
-        self._visit_duplicates = self._visit_data.duplicated(['id', 'visit'], keep=False)
-        if self._visit_duplicates is not None:
-            message = f"""The visits data have {len(self._visit_duplicates)} duplicates based on id. Extra 
-            duplicates will be removed in the calculation. To get the duplicates, use get_visit_duplicates()."""
-            show_warning(message)
-            self._visit_data.drop_duplicates(['id', 'visit'], inplace=True)
+    @staticmethod
+    def _get_tlfb_missing_data(tlfb_df):
+        tlfb_df['diff_days'] = tlfb_df.groupby(['id'])['date'].diff().map(
+            lambda x: x.days if pd.notnull(x) else 1)
+        return tlfb_df[tlfb_df['diff_days'] > 1.0]
 
-    def get_visit_duplicates(self):
-        return self._visit_duplicates
+    def _impute_tlfb_missing_block(self, start_record: TLFBRecord, end_record: TLFBRecord, impute):
+        subject_id, start_date, start_amount, _ = start_record
+        subject_id, end_date, end_amount, _ = end_record
+        imputation_code = TLFBImputationCode.code_for_missing_interval(start_amount, end_amount, self.abst_cutoff).value
+        day_number = (end_date - start_date).days
+        imputed_records = []
+        if impute == "linear":
+            m = (end_amount - start_amount) / day_number
+            for i in range(1, day_number):
+                imputed_date = start_date + timedelta(days=i)
+                imputed_amount = m * i + start_amount
+                imputed_records.append(TLFBRecord(subject_id, imputed_date, imputed_amount, imputation_code))
+        elif impute == "uniform":
+            imputed_amount = mean([start_amount, end_amount])
+            for i in range(1, day_number):
+                imputed_date = start_date + timedelta(days=i)
+                imputed_records.append(TLFBRecord(subject_id, imputed_date, imputed_amount, imputation_code))
+        else:
+            imputed_amount = float(impute)
+            for i in range(1, day_number):
+                imputed_date = start_date + timedelta(days=i)
+                imputed_records.append(TLFBRecord(subject_id, imputed_date, imputed_amount, imputation_code))
+        return imputed_records
 
-    def sort_visit_data(self):
-        self._visit_data = self._visit_data.sort_values(by=["id", "visit"]).reset_index(drop=True)
-
-    def _impute_visit_data(self, how_impute_visit):
-        if how_impute_visit is None:
+    def impute_visit_data(self, impute='freq', show_impute_summary=True):
+        """
+        Impute any missing visit data.
+        :param impute: Union["freq", "mean", None], how the missing visit data are imputed
+        1. None: no imputation
+        2. "freq"=use the most frequent, see below for further clarification
+        3. "mean"=use the average, see below for further clarification
+            Both imputation methods assume that the visit structure is the same among all subjects. It will first find
+            the earliest visit as the anchor date, impute any missing visit dates either using the average or the most
+            frequent interval. Please note the anchor dates can't be missing.
+        :param show_impute_summary: bool, whether show the imputation summary report, default=True
+        """
+        if impute is None or str(impute).lower() == "none":
             return
-        if how_impute_visit not in ('freq', 'mean'):
+        if impute not in ('freq', 'mean'):
             raise InputArgumentError('You can only specify the imputation method to be "freq" or "mean".')
-        min_date_indices = self._visit_data.groupby(['id'])['date'].idxmin()
-        anchor_visit = self._visit_data.loc[min_date_indices, 'visit'].value_counts().idxmax()
-        _visit_data_wide = self._visit_data.pivot(index='id', columns='visit', values='date')
-        missing_anchor_ids = set(_visit_data_wide.index[_visit_data_wide[anchor_visit].isnull()])
+        self.visit_data = self.visit_data.sort_values(by=['id', 'visit']).reset_index(drop=True)
+        min_date_indices = self.visit_data.groupby(['id'])['date'].idxmin()
+        anchor_visit = self.visit_data.loc[min_date_indices, 'visit'].value_counts().idxmax()
+        visit_ids = sorted(self.visit_data['id'].unique())
+        anchor_ids = set(self.visit_data.loc[self.visit_data['visit'] == anchor_visit, 'id'].unique())
+        missing_anchor_ids = set(visit_ids) - anchor_ids
         if missing_anchor_ids:
             message = f"Subjects {missing_anchor_ids} are missing anchor visit {anchor_visit}. " \
                       f"There might be problems calculating abstinence data for these subjects."
             show_warning(message)
-        visits = set(_visit_data_wide.columns) - {'id', anchor_visit}
-        anchor_visits = _visit_data_wide.loc[:, anchor_visit]
+        ids_s = pd.Series(visit_ids, name='id')
+        anchor_dates = self.visit_data.loc[self.visit_data['visit'] == anchor_visit, ['id', 'date']]
+        anchor_df = pd.merge(ids_s, anchor_dates, how='outer', on='id')
+        df_anchor = anchor_df.copy()
+        df_anchor['visit'] = anchor_visit
+        df_anchor['imputed_date'] = df_anchor['date']
+        imputed_visit_dfs = [df_anchor]
+        visits = self.visits - {anchor_visit}
+        anchor_df.rename({'date': 'anchor_date'}, axis=1, inplace=True)
         for visit in visits:
-            days_diff = (_visit_data_wide[visit] - anchor_visits).map(lambda day: day.days)
-            used_days_diff = int(days_diff.median()) if how_impute_visit == 'freq' else int(days_diff.mean())
-            _visit_data_wide[visit] = _visit_data_wide.apply(
-                lambda x: x[visit] if pd.notnull(x[visit]) else x[anchor_visit] + timedelta(days=used_days_diff),
+            visit_dates = self.visit_data.loc[self.visit_data['visit'] == visit, ['id', 'date']]
+            df_visit = pd.merge(anchor_df, visit_dates, how='outer', on='id')
+            days_diff = (df_visit['date'] - df_visit['anchor_date']).map(lambda day_diff: day_diff.days)
+            used_days_diff = int(days_diff.median()) if impute == 'freq' else int(days_diff.mean())
+            df_visit['imputed_date'] = df_visit.apply(
+                lambda x: x['date'] if pd.notnull(x['date']) else x['date'] + timedelta(days=used_days_diff),
                 axis=1)
-        self._visit_data_wide = _visit_data_wide
+            imputed_visit_dfs.append(df_visit)
+        visit_data_imputed = pd.concat(imputed_visit_dfs)
+        visit_data_imputed['imputation_code'] = visit_data_imputed.apply(
+            lambda x: 0 if x['date'] is not pd.NaT else 1,
+            axis=1)
+        self.visit_data_imputed = visit_data_imputed.drop(['date'], axis=1).rename({'imputed_date': 'date'}). \
+            sort_values(by=['id', 'visit']).reset_index()
+        if show_impute_summary:
+            impute_summary = self.visit_data_imputed.groupby(['imputation_code']).size().reset_index(). \
+                rename({0: "record_count"}, axis=1)
+            impute_summary['imputation_code'] = impute_summary['imputation_code'].map({0: 'Raw', 1: 'Imputed'})
+            _print_report_to_console(True, ['Visit Imputation Summary'], [impute_summary])
+        else:
+            message = f"The number of imputed records: {visit_data_imputed['imputation_code'].sum()}"
+            show_warning(message)
+
+        # _visit_data_wide = self.visit_data.pivot(index='id', columns='visit', values='date').reset_index()
+        # missing_anchor_ids = set(_visit_data_wide.index[_visit_data_wide[anchor_visit].isnull()])
+        # if missing_anchor_ids:
+        #     message = f"Subjects {missing_anchor_ids} are missing anchor visit {anchor_visit}. " \
+        #               f"There might be problems calculating abstinence data for these subjects."
+        #     show_warning(message)
+        # visits = set(_visit_data_wide.columns) - {'id', anchor_visit}
+        # anchor_visits = _visit_data_wide.loc[:, anchor_visit]
+        # for visit in visits:
+        #     days_diff = (_visit_data_wide[visit] - anchor_visits).map(lambda day: day.days)
+        #     used_days_diff = int(days_diff.median()) if impute == 'freq' else int(days_diff.mean())
+        #     _visit_data_wide[visit] = _visit_data_wide.apply(
+        #         lambda x: x[visit] if pd.notnull(x[visit]) else x[anchor_visit] + timedelta(days=used_days_diff),
+        #         axis=1)
+        # self._visit_data_wide = _visit_data_wide
+        #
+        # visit_data_imputed: pd.DataFrame = _visit_data_wide.melt(id_vars='id', var_name='visit', value_name='imputed_date')
+        # visit_data_imputed = pd.merge(visit_data_imputed, self.visit_data, how='outer', on=['id', 'visit'])
+        # visit_data_imputed['imputation_code'] = visit_data_imputed.apply(
+        #     lambda x: 0 if x['date'] is not pd.NaT else 1,
+        #     axis=1
+        # )
+        # self.visit_data_imputed = visit_data_imputed.drop(['date'], axis=1).rename({'imputed_date': 'date'}).\
+        #     sort_values(by=['id', 'visit']).reset_index()
+        # if show_impute_summary:
+        #     impute_summary = self.visit_data_imputed.groupby(['imputation_code']).size().reset_index().\
+        #         rename({0: "record_count"}, axis=1)
+        #     impute_summary['imputation_code'] = impute_summary['imputation_code'].map({0: 'Raw', 1: 'Imputed'})
+        #     _print_report_to_console(True, ['Visit Imputation Summary'], [impute_summary])
+        # else:
+        #     message = f"The number of imputed records: {visit_data_imputed['imputation_code'].sum()}"
+        #     show_warning(message)
 
     @staticmethod
     def format_visits_names(end_visits, abst_var_names, prefix=''):
         if not isinstance(end_visits, list):
             end_visits = [end_visits]
+
         if abst_var_names == 'inferred':
             abst_names = [f"{prefix}_{end_visit}" for end_visit in end_visits]
         elif isinstance(abst_var_names, list):
@@ -441,7 +699,7 @@ class AbstinenceCalculator:
         return pd.DataFrame.from_dict({'id': self._subject_ids, abst_name: results})
 
     def _get_subject_data(self, subject_id, start_date, end_date, mode):
-        df = self._tlfb_data if mode == "itt" else self._tlfb_data_imputed
+        df = self.tlfb_data if mode == "itt" else self.tlfb_data_imputed
         subject_data = df[(df['id'] == subject_id) &
                           (start_date <= df['date']) &
                           (df['date'] < end_date)]
@@ -450,8 +708,8 @@ class AbstinenceCalculator:
     def _get_visit_dates(self, subject_id, visit_names, increment_days=0):
         if not isinstance(visit_names, list):
             visit_names = [visit_names]
-        visit_dates_cond = (self._visit_data['id'] == subject_id) & (self._visit_data['visit'].isin(visit_names))
-        dates = list(self._visit_data.loc[visit_dates_cond, 'date'])
+        visit_dates_cond = (self.visit_data['id'] == subject_id) & (self.visit_data['visit'].isin(visit_names))
+        dates = list(self.visit_data.loc[visit_dates_cond, 'date'])
         if increment_days:
             dates = [date + timedelta(days=increment_days) for date in dates]
         return dates[0] if len(dates) == 1 else dates
@@ -466,6 +724,83 @@ class AbstinenceCalculator:
     @staticmethod
     def _increment_days(dates, days=1):
         return [date + timedelta(days=days) for date in dates]
+
+    @classmethod
+    def read_data(cls, tlfb_filepath, visit_filepath, impute_tlfb="linear", impute_visit="mean", abst_cutoff=0):
+        """
+        Create an instance object by reading and processing data in a single combined step
+        :param tlfb_filepath: filepath for the TLFB data in the tabular format, str or pathlib.Path
+        :param visit_filepath: filepath for the visit data in the tabular format, str or pathlib.Path
+        :param impute_tlfb:
+        :param impute_visit:
+        :param abst_cutoff: The cutoff of abstinence, default=0, inclusive, for example if the cutoff is 0.1 then 0.1
+        and below is considered abstinent
+        :return: an instance object for AbstinenceCalculator class
+        """
+        calculator = cls(tlfb_filepath, visit_filepath)
+        calculator.abst_cutoff = abst_cutoff
+        calculator.prepare_tlfb_data(impute_tlfb)
+        calculator.prepare_visit_data(impute_visit)
+        return calculator
+
+    def prepare_tlfb_data(self, impute="uniform"):
+        """
+        Prepare the TLFB data to make them ready for abstinence calculation
+        :param impute: How the missing TLFB data are imputed, None means no imputations.
+        Supported options:
+        1. None: no imputation
+        2. "uniform" (the default): impute the missing TLFB data using the mean value of the amounts before and after
+        the missing interval
+        3. "linear": impute the missing TLFB data by interpolating a linear trend based on the amounts before and after
+        the missing interval
+        4. Numeric value: impute the missing TLFB data using a fixed value
+        """
+        self._subject_ids = self.tlfb_data['id'].unique()
+        self.remove_tlfb_duplicates()
+        self.sort_tlfb_data()
+        self.impute_tlfb_data(impute)
+
+    def remove_tlfb_duplicates(self):
+        self._tlfb_duplicates = self.tlfb_data.loc[self.tlfb_data.duplicated(['id', 'date'], keep=False), :].copy()
+        self._tlfb_duplicates.sort_values(by=['id', 'date'], inplace=True)
+        if len(self._tlfb_duplicates) > 0:
+            message = f"""The TLFB data have {len(self._tlfb_duplicates)} duplicates based on id and date. Extra 
+            duplicates will be removed in the calculation. To get the duplicates, use get_TLFB_duplicates()."""
+            show_warning(message)
+            self.tlfb_data.drop_duplicates(["id", "date"], inplace=True)
+
+    def sort_tlfb_data(self):
+        self.tlfb_data = self.tlfb_data.sort_values(by=["id", "date"]).reset_index(drop=True)
+
+    def get_tlfb_duplicates(self):
+        return self._tlfb_duplicates
+
+    def prepare_visit_data(self, impute="freq"):
+        """
+        Prepare the visit data ready for calculation.
+        :param impute: how the missing visits are imputed, None=no imputation, "freq"=use the most frequent,
+                        "mean"=use the average. Both imputation methods assume that the visit structure is the same
+                        among all subjects. It will first find the earliest visit as the anchor date, impute any missing
+                        visit dates either using the average or the most frequent interval. Please note the anchor dates
+                        can't be missing.
+        """
+        self.remove_visit_duplicates_if_applicable()
+        self.impute_visit_data(impute)
+
+    def remove_visit_duplicates_if_applicable(self):
+        self._visit_duplicates = self.visit_data.loc[self.visit_data.duplicated(['id', 'visit'], keep=False), :].copy()
+        self._visit_duplicates.sort_values(by=['id', 'visit'], inplace=True)
+        if len(self._visit_duplicates) > 0:
+            message = f"""The visits data have {len(self._visit_duplicates)} duplicates based on id and visit. Extra 
+            duplicates will be removed in the calculation. To get the duplicates, use get_visit_duplicates()."""
+            show_warning(message)
+            self.visit_data.drop_duplicates(['id', 'visit'], inplace=True)
+
+    def get_visit_duplicates(self):
+        return self._visit_duplicates
+
+    def sort_visit_data(self):
+        self.visit_data = self.visit_data.sort_values(by=["id", "visit"]).reset_index(drop=True)
 
 
 def show_warning(warning_message):
@@ -485,6 +820,57 @@ def read_data_from_path(file_path):
     return df
 
 
+def _validate_duplicate_arg_options(duplicate_kept):
+    if duplicate_kept not in ("min", "max", "mean", False):
+        raise InputArgumentError("Please specify how you want to keep the duplicates, min, max, mean, or False.")
+
+
+def _drop_na_records(df):
+    missing_records = df.isnull().any(axis=1).sum()
+    if missing_records:
+        show_warning(f"The Number of Dropped Records With Any Missing Columns: {missing_records}.")
+    return df.dropna(axis=0).reset_index(drop=True)
+
+
+def _recode_value(floor_value, ceil_value, x):
+    recoded_x = x
+    if floor_value is not None:
+        recoded_x = max(x, floor_value)
+    if ceil_value is not None:
+        recoded_x = min(x, ceil_value)
+    return recoded_x
+
+
+def _print_report_to_console(to_print, titles, dfs):
+    if not to_print:
+        return
+    pd.set_option('display.max_columns', None)
+    for title, df in zip(titles, dfs):
+        print(f"{'*' * 80}\n{title:^80}\n{'*' * 80}")
+        print(df)
+    pd.reset_option('max_columns')
+
+
+def _validate_columns(df, needed_cols_ordered, data_name, col_names):
+    needed_cols_unordered = set(needed_cols_ordered)
+    current_cols_unordered = set(df.columns)
+    if len(current_cols_unordered) != len(needed_cols_unordered):
+        raise FileFormatError(f'The {data_name} data should have only {col_names} columns.')
+    if needed_cols_unordered != current_cols_unordered:
+        warning_message = f"The {data_name} data doesn't appear to have the needed columns: {col_names}. It has been " \
+                          f"renamed in such order for calculation purposes. If your columns aren't in this order, " \
+                          f"and you'll encounter errors in later calculation steps."
+        show_warning(warning_message)
+        df.columns = needed_cols_ordered
+
+# unique_TLFB_ids = set(self._tlfb_data['id'].unique())
+#         unique_visit_ids = set(self._visit_data['id'].unique())
+#         no_visit_ids = unique_TLFB_ids - unique_visit_ids
+#         if no_visit_ids:
+#             message = f"The visit data don't have the visit information for some subjects. Those subjects " \
+#                       f"({no_visit_ids}) who don't visit data can't be scored."
+#             show_warning(message)
+
 # # %%
 # tlfb_df = pd.read_sas("tbltimelinefb.sas7bdat", encoding="utf-8")
 # tlfb_df.drop(["SubstanceId"], axis=1, inplace=True)
@@ -498,11 +884,13 @@ def read_data_from_path(file_path):
 
 
 # %%
-abstinence_calculator = AbstinenceCalculator("smartmod_tlfb_data.csv", "smartmod_visit_data.csv")
-abstinence_calculator.prepare_tlfb_data("uniform")
-abstinence_calculator.prepare_visit_data("freq")
-# abstinence_calculator.get_data_summary()
-# help(AbstinenceCalculator)
+abst_cal = AbstinenceCalculator("smartmod_tlfb_data.csv", "smartmod_visit_data.csv")
+abst_cal.profile_tlfb_data(10, 50)
+abst_cal.profile_visit_data("12/01/2000", "12/01/2018")
+abst_cal.recode_tlfb_abnormality(10, 50, "mean")
+abst_cal.recode_visit_abnormality("12/01/2000", "12/01/2018", "min")
+abst_cal.impute_tlfb_data(show_impute_summary=True)
+abst_cal.impute_visit_data(show_impute_summary=True)
 
 # %%
 # from math import log10
