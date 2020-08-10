@@ -913,25 +913,3 @@ class AbstinenceCalculator:
         if lapse:
             lapse_id, lapse_date, lapse_amount = lapse.id, lapse.date, lapse.amount
             lapses.append((lapse_id, lapse_date, lapse_amount, abst_name))
-
-
-# %%
-tlfb_data = TLFBData("../temp/smartmod_tlfb_data.csv")
-tlfb_data.profile_data()
-tlfb_data.drop_na_records()
-tlfb_data.check_duplicates()
-tlfb_data.recode_data()
-tlfb_data.impute_data()
-
-visit_data = VisitData("../temp/smartmod_visit_data.csv")
-visit_data.profile_data()
-visit_data.drop_na_records()
-visit_data.check_duplicates()
-visit_data.recode_data()
-visit_data.impute_data()
-
-abst_cal = AbstinenceCalculator(tlfb_data, visit_data)
-abst_cal.check_data_availability()
-abst_cal.abstinence_cont(2, [5, 6])
-abst_cal.abstinence_pp([5, 6], [7, 14, 21, 28])
-abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs')
