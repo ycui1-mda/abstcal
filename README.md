@@ -253,11 +253,13 @@ You can find out how many subjects have the TLFB data and how many have the visi
 abst_cal.check_data_availability()
 ```
 
-#### 5b. Calculate abstinence
+#### 4c. Calculate abstinence
 For all the function calls to calculate abstinence, you can request the calculation to be
 ITT (intent-to-treat) or RO (responders-only). You can optionally specify the calculated
 abstinence variable names. By default, the abstinence names will be inferred. Another shared
-argument is whether you want to include the ending date.
+argument is whether you want to include the ending date. Notably, each method will generate
+the abstinence dataset and a dataset recording first lapses that make a subject non-abstinent
+for a particular abstinence calculation.
 
 ##### Continuous abstinence
 To calculate the continuous abstinence, you need to specify the visit when the window starts
@@ -265,13 +267,13 @@ and the visit when the window ends. To provide greater flexibility, you can spec
 of visits to generate multiple time windows.
 ```
 # Calculate only one window
-abst_cal.abstinence_cont(2, 5)
+abst_df, lapse_df = abst_cal.abstinence_cont(2, 5)
 
 # Calculate two windows
-abst_cal.abstinence_cont(2, [5, 6])
+abst_df, lapse_df = abst_cal.abstinence_cont(2, [5, 6])
 
 # Calculate three windows with abstinence names specified
-abst_cal.abstinence_cont(2, [5, 6, 7], ["abst_var1", "abst_var2", "abst_var3"])
+abst_df, lapse_df = abst_cal.abstinence_cont(2, [5, 6, 7], ["abst_var1", "abst_var2", "abst_var3"])
 ```
 
 ##### Point-prevalence abstinence
@@ -280,10 +282,10 @@ specify the number of days preceding the time points. To provide greater flexibi
 can specify multiple visits and multiple numbers of days.
 ```
 # Calculate only one time point, 7-d point-prevalence
-abst_cal.abstinence_pp(5, 7)
+abst_df, lapse_df = abst_cal.abstinence_pp(5, 7)
 
 # Calculate multiple time points, multiple day conditions
-abst_cal.abstinence_pp([5, 6], [7, 14, 21, 28])
+abst_df, lapse_df = abst_cal.abstinence_pp([5, 6], [7, 14, 21, 28])
 ```
 
 ##### Prolonged abstinence
@@ -293,22 +295,52 @@ multiple time points. There are several options regarding how a lapse is defined
 for some examples.
 ```
 # Lapse isn't allowed
-abst_cal.abstinence_prolonged(3, [5, 6], False)
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], False)
 
 # Lapse is defined as exceeding a defined amount of substance use
-abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs')
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs')
 
 # Lapse is defined as exceeding a defined number of substance use days
-abst_cal.abstinence_prolonged(3, [5, 6], '3 days')
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '3 days')
 
 # Lapse is defined as exceeding a defined amount of substance use over a time window
-abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs/7 days')
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs/7 days')
 
 # Lapse is defined as exceeding a defined number of substance use days over a time window
-abst_cal.abstinence_prolonged(3, [5, 6], '3 days/7 days')
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '3 days/7 days')
 
 # Combination of these criteria
-abst_cal.abstinence_prolonged(3, [5, 6], ('5 cigs', '3 days/7 days'))
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], ('5 cigs', '3 days/7 days'))
+```
+
+### 5. Output Datasets
+#### 5a. The abstinence datasets
+To output the abstinence datasets that you have created from calling the abstinence calculation
+methods, you can use the following method to create a combined dataset, something like below.
+id | itt_abst_cont_v5_v2 | itt_abst_cont_v6_v2 | itt_abst_pp7_v5 | itt_abst_pp7_v6
+------------ | ------------- | ------------- | ------------ | -------------
+1000 | 1 | 1 | 1 | 1
+1001 | 1 | 0 | 1 | 0
+1002 | 1 | 1 | 1 | 1
+1003 | 0 | 0 | 1 | 1
+1004 | 0 | 0 | 1 | 0 
+1005 | 0 | 0 | 0 | 1
+```
+abst_cal.merge_abst_data_to_file([abst_df0, abst_df1, abst_df2], "merged_abstinence_data.csv")
+```
+#### 5b. The lapse datasets
+To output the lapse datasets that you have created from calling the abstinence calculation
+methods, you can use the following method to create a combined dataset, something like below.
+id | date | amount | abst_name
+------------ | ------------- | ------------- | -------------
+1000 | 02/03/2019 | 10 | itt_abst_cont_v5
+1001 | 03/05/2019 | 8 | itt_abst_cont_v5
+1002 | 04/06/2019 | 12 | itt_abst_cont_v5
+1000 | 02/06/2019 | 9 | itt_abst_cont_v6
+1001 | 04/07/2019 | 10 | itt_abst_cont_v6
+1002 | 05/08/2019 | 8 | itt_abst_cont_v6
+```
+abst_cal.merge_lapse_data_to_file([lapse_df0, lapse_df1, lapse_df2], "merged_lapse_data.csv")
 ```
 
 ## Questions or Comments
