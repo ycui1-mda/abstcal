@@ -683,7 +683,7 @@ class AbstinenceCalculator:
 
             results.append(result)
 
-        abstinence_df = pd.DataFrame(results, columns=['id', *abst_names])
+        abstinence_df = pd.DataFrame(results, columns=['id', *abst_names]).set_index("id")
         lapses_df = pd.DataFrame(lapses, columns=['id', 'date', 'amount', 'abst_name']).\
             sort_values(by=['abst_name', 'id', 'date'])
 
@@ -739,7 +739,7 @@ class AbstinenceCalculator:
 
             results.append(result)
 
-        abstinence_df = pd.DataFrame(results, columns=['id', *all_abst_names])
+        abstinence_df = pd.DataFrame(results, columns=['id', *all_abst_names]).set_index("id")
         lapses_df = pd.DataFrame(lapses, columns=['id', 'date', 'amount', 'abst_name']).\
             sort_values(by=['abst_name', 'id', 'date'])
 
@@ -865,7 +865,7 @@ class AbstinenceCalculator:
 
             results.append(result)
 
-        abstinence_df = pd.DataFrame(results, columns=['id', *all_abst_names])
+        abstinence_df = pd.DataFrame(results, columns=['id', *all_abst_names]).set_index("id")
         lapses_df = pd.DataFrame(lapses, columns=['id', 'date', 'amount', 'abst_name']).\
             sort_values(by=['abst_name', 'id', 'date'])
 
@@ -914,3 +914,29 @@ class AbstinenceCalculator:
         if lapse:
             lapse_id, lapse_date, lapse_amount = lapse.id, lapse.date, lapse.amount
             lapses.append((lapse_id, lapse_date, lapse_amount, abst_name))
+
+    @staticmethod
+    def merge_abst_data_to_file(dfs, filepath):
+        """
+        Merge abstinence data and write the merged DataFrame to a file
+
+        :param dfs: Union[list, tuple], the list of abstinence data results (DataFrame)
+
+        :param filepath: Union[str, path], the output file name with a proper extension
+
+        :return: None
+        """
+        pd.concat(dfs, axis=1).to_csv(filepath)
+
+    @staticmethod
+    def merge_lapse_data_to_file(dfs, filepath):
+        """
+        Merge lapses data and write the merged DataFrame to a file
+
+        :param dfs: Union[list, tuple], the list of lapse data results (DataFrame)
+
+        :param filepath: Union[str, path], the output file name with a proper extension
+
+        :return: None
+        """
+        pd.concat(dfs, axis=0).to_csv(filepath, index=False)
