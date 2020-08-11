@@ -222,7 +222,7 @@ be recoded as the maximal. The number of recoded outliers will be reported.
 visit_data.recode_data("07/01/2000", "12/08/2020")
 ```
 
-##### 2f. Impute the missing visit data
+##### 3f. Impute the missing visit data
 To calculate the ITT abstinence, the visit data will be imputed for the missing records.
 The program will first find the earliest visit date as the anchor visit, which is 
 presumed to be non-missing for all subjects. Then it will calculate the difference in 
@@ -240,10 +240,80 @@ visit_data.impute_data("mean")
 ```
 
 ### 4. Calculate Abstinence
+##### 4a. Create the abstinence calculator using the TLFB and visit data
+You can specify the cutoff for the abstinence. By default, only subjects who have both the
+TLFB and visit data will be used for calculating abstinence.
 ```
 abst_cal = AbstinenceCalculator(tlfb_data, visit_data)
-abst_cal.check_data_availability()
-abst_cal.abstinence_cont(2, [5, 6])
-abst_cal.abstinence_pp([5, 6], [7, 14, 21, 28])
-abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs')
 ```
+
+##### 4b. Check data availability (optional)
+You can find out how many subjects have the TLFB data and how many have the visit data.
+```
+abst_cal.check_data_availability()
+```
+
+##### 5b. Calculate abstinence
+For all the function calls to calculate abstinence, you can request the calculation to be
+ITT (intent-to-treat) or RO (responders-only). You can optionally specify the calculated
+abstinence variable names. By default, the abstinence names will be inferred. Another shared
+argument is whether you want to include the ending date.
+
+###### Continuous abstinence
+To calculate the continuous abstinence, you need to specify the visit when the window starts
+and the visit when the window ends. To provide greater flexibility, you can specify a series
+of visits to generate multiple time windows.
+```
+# Calculate only one window
+abst_cal.abstinence_cont(2, 5)
+
+# Calculate two windows
+abst_cal.abstinence_cont(2, [5, 6])
+
+# Calculate three windows with abstinence names specified
+abst_cal.abstinence_cont(2, [5, 6, 7], ["abst_var1", "abst_var2", "abst_var3"])
+```
+
+###### Point-prevalence abstinence
+To calculate the point-prevalence abstinence, you need to specify the visits. You'll need to
+specify the number of days preceding the time points. To provide greater flexibility, you
+can specify multiple visits and multiple numbers of days.
+```
+# Calculate only one time point, 7-d point-prevalence
+abst_cal.abstinence_pp(5, 7)
+
+# Calculate multiple time points, multiple day conditions
+abst_cal.abstinence_pp([5, 6], [7, 14, 21, 28])
+```
+
+###### Prolonged abstinence
+To calculate the prolonged abstinence, you need to specify the quit visit and the number of
+days for the grace period (the default length is 14 days). You can calculate abstinence for
+multiple time points. There are several options regarding how a lapse is defined. See below
+for some examples.
+```
+# Lapse isn't allowed
+abst_cal.abstinence_prolonged(3, [5, 6], False)
+
+# Lapse is defined as exceeding a defined amount of substance use
+abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs')
+
+# Lapse is defined as exceeding a defined number of substance use days
+abst_cal.abstinence_prolonged(3, [5, 6], '3 days')
+
+# Lapse is defined as exceeding a defined amount of substance use over a time window
+abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs/7 days')
+
+# Lapse is defined as exceeding a defined number of substance use days over a time window
+abst_cal.abstinence_prolonged(3, [5, 6], '3 days/7 days')
+
+# Combination of these criteria
+abst_cal.abstinence_prolonged(3, [5, 6], ('5 cigs', '3 days/7 days'))
+```
+
+## Questions or Comments
+If you have any questions about this package, please feel free to leave comments here or
+send me an email to ycui1@mdanderson.org.
+
+## License
+MIT License
