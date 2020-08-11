@@ -1,0 +1,27 @@
+Metadata-Version: 2.1
+Name: abstcal-ycui1
+Version: 0.2
+Summary: Calculate abstinence using the timeline follow back data in addiction research
+Home-page: https://github.com/ycui1/abstcal
+Author: Yong Cui
+Author-email: yong.cui01@gmail.com
+License: UNKNOWN
+Description: # Abstinence Calculator
+        
+        A Python package to calculate abstinence results using the timeline follow back interview data
+        
+        ## Installation
+        Install the package using the pip tool 
+        
+        `pip install abstcal`
+        
+        ## Overview of the Tool
+        This package is developed to score abstinence using the Timeline Follow Back (TLFB) and visit data in clinical substance use research. It provides functionalities to preprocess the datasets to remove duplicates and outliers. In addition, it can impute missing data using various criteria. It supports the calculation of abstinence of varied definitions, including continuous, point-prevalence, and prolonged.
+        
+        ## Use Example 
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
