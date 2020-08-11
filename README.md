@@ -74,7 +74,7 @@ from abstcal import TLFBData, VisitData, AbstinenceCalculator
 ```
 
 ### 2. Process the TLFB Data
-##### 2a. Read the TLFB data
+#### 2a. Read the TLFB data
 You can either specify the full path of the TLFB data or just the filename if the dataset 
 is in your current work directory. Supported file formats include comma-separated (.csv), 
 tab-delimited (.txt), and Excel spreadsheets (.xls, .xlsx).
@@ -82,7 +82,7 @@ tab-delimited (.txt), and Excel spreadsheets (.xls, .xlsx).
 tlfb_data = TLFBData('path_to_tlfb.csv')
 ```
 
-##### 2b. Profile the TLFB data
+#### 2b. Profile the TLFB data
 In this step, you will see a report of the data summary, such as the number of records, 
 the number of subjects, and any applicable abnormal data records, including duplicates 
 and outliers. In terms of outliers, you can specify the minimal and maximal values for 
@@ -95,14 +95,14 @@ tlfb_data.profile_data()
 # Identify outliers that are outside of the range
 tlfb_data.profile_data(0, 100)
 ```
-##### 2c. Drop data records with any missing values
+#### 2c. Drop data records with any missing values
 Those records with missing *id*, *date*, or *amount* will be removed. The number of removed
 records will be reported.
 ```
 tlfb_data.drop_na_records()
 ```
 
-##### 2d. Check and remove any duplicate records
+#### 2d. Check and remove any duplicate records
 Duplicate records are identified based on __*id*__ and __*date*__. There are different 
 ways to remove duplicates: *min*, *max*, or *mean*, which keep the minimal, maximal, 
 or mean of the duplicate records. You can also have the options to remove all duplicates. 
@@ -124,7 +124,7 @@ tlfb_data.check_duplicates("mean")
 tlfb_data.check_duplicates(False)
 ```
 
-##### 2e. Recode outliers (optional)
+#### 2e. Recode outliers (optional)
 Those values outside the specified range are considered outliers. The values lower than 
 the minimal will be recoded as the minimal, while the values higher than the maximal will
 be recoded as the maximal. The number of recoded outliers will be reported.
@@ -133,7 +133,7 @@ be recoded as the maximal. The number of recoded outliers will be reported.
 tlfb_data.recode_data(0, 100)
 ```
 
-##### 2f. Impute the missing TLFB data
+#### 2f. Impute the missing TLFB data
 To calculate the ITT abstinence, the TLFB data will be imputed for the missing records.
 All contiguous missing intervals will be identified. Each of the intervals will be imputed
 based on the two values, one before the interval and the other after the interval. You can
@@ -154,7 +154,7 @@ tlfb_data.impute_data(5)
 ```
 
 ### 3. Process the Visit Data
-##### 3a. Read the visit data
+#### 3a. Read the visit data
 Similar to reading the TLFB data, you can read files in .csv, .txt, .xls, or .xlsx format. 
 ```
 # Read the visit data in the long format (the default option)
@@ -164,7 +164,7 @@ visit_data = VisitData("file_path.csv")
 visit_data = VisitData("file_path.csv", "wide")
 ```
 
-##### 3b. Profile the visit data
+#### 3b. Profile the visit data
 You will see a report of the data summary, such as the number of records, the number of 
 subjects, and any applicable abnormal data records, including duplicates and outliers. 
 In terms of outliers, you can specify the minimal and maximal values for the dates. The
@@ -184,14 +184,14 @@ visit_data.profile_data("07/01/2000", "12/08/2020")
 visit_data.profile_data(expected_visit_order=[1, 2, 3, 5, 4])
 ```
 
-##### 3c. Drop data records with any missing values 
+#### 3c. Drop data records with any missing values 
 Those records with missing *id*, *visit*, or *date* will be removed. The number of removed
 records will be reported.
 ```
 visit_data.drop_na_records()
 ```
 
-##### 3d. Check and remove any duplicate records
+#### 3d. Check and remove any duplicate records
 Duplicate records are identified based on __*id*__ and __*visit*__. There are different 
 ways to remove duplicates: *min*, *max*, or *mean*, which keep the minimal, maximal, 
 or mean of the duplicate records. The options are the same as how you deal with duplicates
@@ -213,7 +213,7 @@ visit_data.check_duplicates("mean")
 visit_data.check_duplicates(False)
 ```
 
-##### 3e. Recode outliers (optional)
+#### 3e. Recode outliers (optional)
 Those values outside the specified range are considered outliers. The values lower than 
 the minimal will be recoded as the minimal, while the values higher than the maximal will
 be recoded as the maximal. The number of recoded outliers will be reported.
@@ -222,7 +222,7 @@ be recoded as the maximal. The number of recoded outliers will be reported.
 visit_data.recode_data("07/01/2000", "12/08/2020")
 ```
 
-##### 3f. Impute the missing visit data
+#### 3f. Impute the missing visit data
 To calculate the ITT abstinence, the visit data will be imputed for the missing records.
 The program will first find the earliest visit date as the anchor visit, which is 
 presumed to be non-missing for all subjects. Then it will calculate the difference in 
@@ -240,26 +240,26 @@ visit_data.impute_data("mean")
 ```
 
 ### 4. Calculate Abstinence
-##### 4a. Create the abstinence calculator using the TLFB and visit data
+#### 4a. Create the abstinence calculator using the TLFB and visit data
 You can specify the cutoff for the abstinence. By default, only subjects who have both the
 TLFB and visit data will be used for calculating abstinence.
 ```
 abst_cal = AbstinenceCalculator(tlfb_data, visit_data)
 ```
 
-##### 4b. Check data availability (optional)
+#### 4b. Check data availability (optional)
 You can find out how many subjects have the TLFB data and how many have the visit data.
 ```
 abst_cal.check_data_availability()
 ```
 
-##### 5b. Calculate abstinence
+#### 5b. Calculate abstinence
 For all the function calls to calculate abstinence, you can request the calculation to be
 ITT (intent-to-treat) or RO (responders-only). You can optionally specify the calculated
 abstinence variable names. By default, the abstinence names will be inferred. Another shared
 argument is whether you want to include the ending date.
 
-###### Continuous abstinence
+##### Continuous abstinence
 To calculate the continuous abstinence, you need to specify the visit when the window starts
 and the visit when the window ends. To provide greater flexibility, you can specify a series
 of visits to generate multiple time windows.
@@ -274,7 +274,7 @@ abst_cal.abstinence_cont(2, [5, 6])
 abst_cal.abstinence_cont(2, [5, 6, 7], ["abst_var1", "abst_var2", "abst_var3"])
 ```
 
-###### Point-prevalence abstinence
+##### Point-prevalence abstinence
 To calculate the point-prevalence abstinence, you need to specify the visits. You'll need to
 specify the number of days preceding the time points. To provide greater flexibility, you
 can specify multiple visits and multiple numbers of days.
@@ -286,7 +286,7 @@ abst_cal.abstinence_pp(5, 7)
 abst_cal.abstinence_pp([5, 6], [7, 14, 21, 28])
 ```
 
-###### Prolonged abstinence
+##### Prolonged abstinence
 To calculate the prolonged abstinence, you need to specify the quit visit and the number of
 days for the grace period (the default length is 14 days). You can calculate abstinence for
 multiple time points. There are several options regarding how a lapse is defined. See below
