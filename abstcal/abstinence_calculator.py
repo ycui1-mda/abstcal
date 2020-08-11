@@ -906,6 +906,7 @@ class AbstinenceCalculator:
         for record in subject_data.itertuples():
             if record.amount > self.abst_cutoff:
                 lapse_record = record
+                break
         return int(no_missing_data and (lapse_record is not None)), lapse_record
 
     @staticmethod

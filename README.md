@@ -54,6 +54,8 @@ id | v0 | v1 | v2 | v3 | v4 | v5
 1001 | 02/05/2019 | 02/13/2019 | 02/20/2019 | 03/11/2019 | 04/06/2019 | 05/09/2019
 
 ## Supported Abstinence Definitions
+The following abstinence definitions have both calculated as the intent-to-treat (ITT) 
+or responders-only options. By default, the ITT option is used.
 1. **Continuous Abstinence**: No substance use in the defined time window. Usually, it 
 starts with the target quit date.
 2. **Point-Prevalence Abstinence**: No substance use in the defined time window preceding 
@@ -72,7 +74,7 @@ from abstcal import TLFBData, VisitData, AbstinenceCalculator
 ```
 
 ### 2. Process the TLFB Data
-##### a. Read the TLFB data
+##### 2a. Read the TLFB data
 You can either specify the full path of the TLFB data or just the filename if the dataset 
 is in your current work directory. Supported file formats include comma-separated (.csv), 
 tab-delimited (.txt), and Excel spreadsheets (.xls, .xlsx).
@@ -80,37 +82,75 @@ tab-delimited (.txt), and Excel spreadsheets (.xls, .xlsx).
 tlfb_data = TLFBData('path_to_tlfb.csv')
 ```
 
-##### b. Profile the TLFB data
+##### 2b. Profile the TLFB data
 In this step, you will see a report of the data summary, such as the number of records, 
 the number of subjects, and any applicable abnormal data records, including duplicates 
 and outliers. In terms of outliers, you can specify the minimal and maximal values for 
 the substance use amounts. Those values outside of the range are considered outliers 
 and are shown in the summary report.
 ```
+# No outlier identification
 tlfb_data.profile_data()
+
+# Identify outliers that are outside of the range
+tlfb_data.profile_data(0, 100)
 ```
-##### c. Drop data records with any missing values
+##### 2c. Drop data records with any missing values
+Those records with missing *id*, *date*, or *amount* will be removed. The number of removed
+records will be reported.
 ```
 tlfb_data.drop_na_records()
 ```
 
-##### d. Check and remove any duplicate records
+##### 2d. Check and remove any duplicate records
 Duplicate records are identified based on __*id*__ and __*date*__. There are different 
 ways to remove duplicates: *min*, *max*, or *mean*, which keep the minimal, maximal, 
 or mean of the duplicate records. You can also have the options to remove all duplicates. 
 You can also simply view the duplicates and handle these duplicates manually.
 ```
-tlfb_data.check_duplicates()
+# Check only, no actions for removing duplicates
+tlfb_data.check_duplicates(None)
+
+# Check and remove duplicates by keeping the minimal
+tlfb_data.check_duplicates("min")
+
+# Check and remove duplicates by keeping the maximal
+tlfb_data.check_duplicates("max")
+
+# Check and remove duplicates by keeping the computed mean (all originals will be removed)
+tlfb_data.check_duplicates("mean")
+
+# Check and remove all duplicates
+tlfb_data.check_duplicates(False)
 ```
 
-##### e. Recode outliers
+##### 2e. Recode outliers (optional)
+Those values outside the specified range are considered outliers. The values lower than 
+the minimal will be recoded as the minimal, while the values higher than the maximal will
+be recoded as the maximal. The number of recoded outliers will be reported.
 ```
-tlfb_data.recode_data()
+# Set the minimal and maximal
+tlfb_data.recode_data(0, 100)
 ```
 
-##### f. Impute the missing TLFB data
+##### 2f. Impute the missing TLFB data
+To calculate the ITT abstinence, the TLFB data need to be imputed for the missing records.
+All contiguous missing intervals will be identified. Each of the intervals will be imputed
+based on the two values, one before the interval and the other after the interval. You can
+choose to impute the missing values for the interval using the mean of these two values or
+interpolate the missing values for the interval using the linear values generated from the
+two values. Alternatively, you can specify a fixed value, which will be used to impute all
+missing values.
 ```
-tlfb_data.impute_data()
+# Use the mean
+tlfb_data.impute_data("uniform")
+
+# Use the linear interpolation
+tlfb_data.impute_data("linear")
+
+# Use a fixed value, whichever is appropriate to your research question
+tlfb_data.impute_data(1)
+tlfb_data.impute_data(5)
 ```
 
 ```
