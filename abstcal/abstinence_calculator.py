@@ -382,7 +382,7 @@ class VisitData(CalculatorData):
         :param min_date_cutoff: Union[None, datetime, str], default None
             The minimal date allowed for the visit's date, lower than that is considered to be an outlier
             When it's set None, outlier detection won't consider the lower bound
-            When it's str, it should be able to be casted to a datetime object, such as '10/23/2020'
+            When it's str, it should be able to be casted to a datetime object, mm/dd/yyyy, such as '10/23/2020'
 
         :param max_date_cutoff: Union[None, datetime, str], default None
             The maximal amount allowed for the consumption, higher than that is considered to be an outlier

@@ -134,7 +134,7 @@ tlfb_data.recode_data(0, 100)
 ```
 
 ##### 2f. Impute the missing TLFB data
-To calculate the ITT abstinence, the TLFB data need to be imputed for the missing records.
+To calculate the ITT abstinence, the TLFB data will be imputed for the missing records.
 All contiguous missing intervals will be identified. Each of the intervals will be imputed
 based on the two values, one before the interval and the other after the interval. You can
 choose to impute the missing values for the interval using the mean of these two values or
@@ -153,14 +153,94 @@ tlfb_data.impute_data(1)
 tlfb_data.impute_data(5)
 ```
 
+### 3. Process the Visit Data
+##### 3a. Read the visit data
+Similar to reading the TLFB data, you can read files in .csv, .txt, .xls, or .xlsx format. 
 ```
-visit_data = VisitData("../smartmod_visit_data.csv")
-visit_data.profile_data()
-visit_data.drop_na_records()
-visit_data.check_duplicates()
-visit_data.recode_data()
-visit_data.impute_data()
+# Read the visit data in the long format (the default option)
+visit_data = VisitData("file_path.csv")
 
+# Read the visit data in the wide format
+visit_data = VisitData("file_path.csv", "wide")
+```
+
+##### 3b. Profile the visit data
+You will see a report of the data summary, such as the number of records, the number of 
+subjects, and any applicable abnormal data records, including duplicates and outliers. 
+In terms of outliers, you can specify the minimal and maximal values for the dates. The
+dates will be inferred from strings. Please use the format *mm/dd/yyyy*.
+Importantly, it will also detect if any subjects have their visits with the dates that
+are out of the order. By default, the order is inferred using the numeric or alphabetic 
+order of the visits. These records with possibly incorrect data may result in wrong
+abstinence calculations.
+```
+# No outlier identification
+visit_data.profile_data()
+
+# Outlier identification
+visit_data.profile_data("07/01/2000", "12/08/2020")
+
+# Specify the expected order of the visits
+visit_data.profile_data(expected_visit_order=[1, 2, 3, 5, 4])
+```
+
+##### 3c. Drop data records with any missing values 
+Those records with missing *id*, *visit*, or *date* will be removed. The number of removed
+records will be reported.
+```
+visit_data.drop_na_records()
+```
+
+##### 3d. Check and remove any duplicate records
+Duplicate records are identified based on __*id*__ and __*visit*__. There are different 
+ways to remove duplicates: *min*, *max*, or *mean*, which keep the minimal, maximal, 
+or mean of the duplicate records. The options are the same as how you deal with duplicates
+in the TLFB data.
+```
+# Check only, no actions for removing duplicates
+visit_data.check_duplicates(None)
+
+# Check and remove duplicates by keeping the minimal
+visit_data.check_duplicates("min")
+
+# Check and remove duplicates by keeping the maximal
+visit_data.check_duplicates("max")
+
+# Check and remove duplicates by keeping the computed mean (all originals will be removed)
+visit_data.check_duplicates("mean")
+
+# Check and remove all duplicates
+visit_data.check_duplicates(False)
+```
+
+##### 3e. Recode outliers (optional)
+Those values outside the specified range are considered outliers. The values lower than 
+the minimal will be recoded as the minimal, while the values higher than the maximal will
+be recoded as the maximal. The number of recoded outliers will be reported.
+```
+# Set the minimal and maximal
+visit_data.recode_data("07/01/2000", "12/08/2020")
+```
+
+##### 2f. Impute the missing visit data
+To calculate the ITT abstinence, the visit data will be imputed for the missing records.
+The program will first find the earliest visit date as the anchor visit, which is 
+presumed to be non-missing for all subjects. Then it will calculate the difference in 
+days between the later visits and the anchor visit. Based on these difference values, the
+following two imputation options are available. The *"freq"* option will use the most
+frequent difference value, which is the default option. The *"mean"* option will use the
+mean difference value.
+
+```
+# Use the most frequent difference value between the missing visit and the anchor visit
+visit_data.impute_data("freq")
+
+# Use the mean difference value between the missing visit and the anchor visit
+visit_data.impute_data("mean")
+```
+
+### 4. Calculate Abstinence
+```
 abst_cal = AbstinenceCalculator(tlfb_data, visit_data)
 abst_cal.check_data_availability()
 abst_cal.abstinence_cont(2, [5, 6])
