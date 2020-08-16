@@ -297,7 +297,7 @@ class TLFBData(CalculatorData):
                 current_date = row.date
                 for day in range(1, maximum_days_to_interpolate+1):
                     interpolated_date = current_date + timedelta(days=-day)
-                    if interpolated_date in interpolated_dates or current_amount < self.abst_cutoff:
+                    if interpolated_date in interpolated_dates or current_amount <= self.abst_cutoff:
                         continue
                     interpolated_amount = pow(2, day / half_life_in_days) * current_amount
                     interpolated_record = \
@@ -334,7 +334,7 @@ class TLFBData(CalculatorData):
         if recode_summary:
             return recode_summary
 
-    def impute_data(self, impute="linear", biochemical_data=None, trigger_amount=0):
+    def impute_data(self, impute="linear", last_record_action="ffill", biochemical_data=None, overridden_amount="infer"):
         """
         Impute the TLFB data
 
@@ -346,11 +346,25 @@ class TLFBData(CalculatorData):
             before and after the missing interval
             Numeric value (int or float): impute the missing TLFB data using the specified value
 
+        :param last_record_action: Union[int, float, "ffill"]
+            to interpolate one more record from the last record (presumably the day before the last visit), this action
+            is useful when you compute abstinence data involving the last visit, which may have missing data on the TLFB
+            data.
+            "ffill" (the default): generate one more record with the same amount of substance use as the last record
+            None: no actions with the last records
+            int, float: a numeric value for interpolation all subjects' last records
+
         :type biochemical_data: TLFBData
         :param biochemical_data: The biochemical data that is used to impute the self-reported data
 
-        :param trigger_amount: Union[float, int]
-            The amount, below which the TLFB data interpolation will be triggered based on the biochemical data
+        :param overridden_amount: Union[float, int, 'infer']
+            The default is 'infer', which means that when the particular date's record exceeds the biochemical
+            abstinence cutoff, while its self-reported use is below the self-reported cutoff, the self-reported use
+            is interpolated as 1 unit above the self-report cutoff. For instance, in most scenarios, the self-reported
+            cutoff is 0, then the self-reported use will be interpolated as 1 when the biochemical value is above the
+            cutoff while the patient's self-reported use is 0.
+            You can also specify what other values to be used for the interpolation when the above described condition
+            is met.
 
         :return: Summary of the imputation
         """
@@ -365,20 +379,35 @@ class TLFBData(CalculatorData):
         self.data.sort_values(by=self._index_keys, inplace=True, ignore_index=True)
         self.data['imputation_code'] = DataImputationCode.RAW.value
 
+        to_concat = list()
+
+        if last_record_action is not None:
+            last_records = self.data.loc[self.data.groupby('id')['date'].idxmax()].copy()
+            last_records['date'] = last_records['date'].map(lambda x: x + timedelta(days=1))
+            if last_record_action != 'ffill':
+                last_records['amount'] = float(last_record_action)
+            last_records['imputation_code'] = DataImputationCode.IMPUTED.value
+            to_concat.append(last_records)
+
         if biochemical_data is not None:
-            _biochemical_data = biochemical_data.data[["id", "amount"]].rename(columns={"amount": "chemical_amount"})
-            _merged = self.data.merge(_biochemical_data, on="id")
+            _biochemical_data = \
+                biochemical_data.data.drop(columns="imputation_code").rename(columns={"amount": "bio_amount"})
+            _merged = self.data.merge(_biochemical_data, how="left", on=["id", "date"])
+            print(_merged)
+            bio_amount = (self.abst_cutoff + 1) if overridden_amount == 'infer' else float(overridden_amount)
 
             def interpolate_tlfb(row):
                 amount = row['amount']
-                imputation_code = row['imputation_code']
-                if row['amount'] <= trigger_amount and row['chemical_amount'] > biochemical_data.biochemical_cutoff:
-                    amount = trigger_amount
+                imputation_code = DataImputationCode.RAW.value
+                if pd.isnull(row['bio_amount']):
+                    return pd.Series([amount, imputation_code])
+                if row['amount'] <= self.abst_cutoff and row['bio_amount'] > biochemical_data.abst_cutoff:
+                    amount = bio_amount
                     imputation_code = DataImputationCode.IMPUTED.value
-                return amount, imputation_code
+                return pd.Series([amount, imputation_code])
 
             _merged[['amount', 'imputation_code']] = _merged.apply(interpolate_tlfb, axis=1)
-            self.data = _merged
+            self.data = _merged.drop(columns="bio_amount")
 
         self.data['diff_days'] = self.data.groupby(['id'])['date'].diff().map(
             lambda x: x.days if pd.notnull(x) else 1)
@@ -391,7 +420,11 @@ class TLFBData(CalculatorData):
             imputed_records.extend(self._impute_missing_block(start_record, end_record, impute=impute))
         self.data.drop(['diff_days'], axis=1, inplace=True)
         imputed_tlfb_data = pd.DataFrame(imputed_records)
-        self.data = pd.concat([self.data, imputed_tlfb_data]).sort_values(self._index_keys, ignore_index=True)
+
+        to_concat.append(self.data)
+        to_concat.append(imputed_tlfb_data)
+
+        self.data = pd.concat(to_concat).sort_values(self._index_keys, ignore_index=True)
         impute_summary = self.data.groupby(['imputation_code']).size().reset_index(). \
             rename({0: "record_count"}, axis=1)
         impute_summary['imputation_code'] = impute_summary['imputation_code'].map(
@@ -588,6 +621,21 @@ class VisitData(CalculatorData):
         )
         return pd.Series(visit_summary)
 
+    def get_retention_rates(self):
+        _data = self.data
+        if "imputation_code" in _data.columns:
+            _data = self.data[self.data['imputation_code'] == 0]
+        subject_count = len(self.subject_ids)
+        retention_df = _data.groupby(['visit'], as_index=False)['date'].count()
+        retention_df.rename(columns={'date': "subject_count"}, inplace=True)
+        retention_df['retention_rate'] = retention_df['subject_count'].map(
+            lambda x: f"{x / subject_count:.2%}"
+        )
+        retention_df['attrition_rate'] = retention_df['subject_count'].map(
+            lambda x: f"{(subject_count - x) / subject_count:.2%}"
+        )
+        return retention_df
+
     def _get_visit_subject_summary(self, min_date_cutoff=None, max_date_cutoff=None, expected_visit_order='infer'):
         visit_dates_amounts = self.data.groupby('id').agg({
             "date": ["count", "min", "max"]
@@ -752,7 +800,7 @@ class VisitData(CalculatorData):
         dates = list(used_data.loc[visit_dates_cond, 'date'])
         if increment_days:
             dates = [date + timedelta(days=increment_days) for date in dates]
-        return dates[0] if len(dates) == 1 else dates
+        return dates
 
 
 # %%
@@ -773,6 +821,7 @@ class AbstinenceCalculator:
         self.visit_data = visit_data
         self.biochemical_data = biochemical_data
         self.exceeded_cutoff = None
+        self.bio_amount = tlfb_data.abst_cutoff + 1
         if biochemical_data is not None:
             condition = biochemical_data.data['amount'] > biochemical_data.abst_cutoff
             self.exceeded_cutoff = biochemical_data.data[condition].sort_values(by=['id', 'date'], ignore_index=True)
@@ -818,7 +867,8 @@ class AbstinenceCalculator:
         for subject_id in self.subject_ids:
             result = [subject_id]
 
-            start_date = self.visit_data.get_visit_dates(subject_id, start_visit, mode=mode)
+            start_dates = self.visit_data.get_visit_dates(subject_id, start_visit, mode=mode)
+            start_date = start_dates[0] if start_dates else pd.NaT
             end_dates = self.visit_data.get_visit_dates(subject_id, end_visits, including_end, mode=mode)
 
             for end_date_i, end_date in enumerate(end_dates):
@@ -834,7 +884,7 @@ class AbstinenceCalculator:
 
         return abstinence_df, lapses_df
 
-    def abstinence_pp(self, end_visits, days, abst_var_names='infer', including_anchor=False, mode="itt"):
+    def abstinence_pp(self, end_visits, days, abst_var_names='infer', including_end=False, mode="itt"):
         """
         Calculate the point-prevalence abstinence using the end visit's date.
 
@@ -845,7 +895,7 @@ class AbstinenceCalculator:
         :param abst_var_names: The name(s) of the abstinence variable(s), by default, the name(s) will be inferred,
             if not inferred, the number of abstinence variable names should match the number of end visits
 
-        :param including_anchor: Whether you want to include the anchor visit or not, default=False
+        :param including_end: Whether you want to include the anchor visit or not, default=False
 
         :param mode: How you want to calculate the abstinence, "itt"=intention-to-treat (the default) or
             "ro"=responders-only
@@ -872,7 +922,7 @@ class AbstinenceCalculator:
 
         for subject_id in self.subject_ids:
             result = [subject_id]
-            end_dates = self.visit_data.get_visit_dates(subject_id, end_visits, including_anchor, mode=mode)
+            end_dates = self.visit_data.get_visit_dates(subject_id, end_visits, including_end, mode=mode)
 
             for day_i, day in enumerate(days):
                 for end_date_i, end_date in enumerate(end_dates):
@@ -891,7 +941,7 @@ class AbstinenceCalculator:
         return abstinence_df, lapses_df
 
     def abstinence_prolonged(self, quit_visit, end_visits, lapse_criterion, grace_days=14, abst_var_names='infer',
-                             including_anchor=False, mode="itt"):
+                             including_end=False, mode="itt"):
         """
         Calculate the prolonged abstinence using the time window
 
@@ -913,7 +963,7 @@ class AbstinenceCalculator:
 
         :param abst_var_names: The names of the abstinence variable, by default, the name will be inferred
 
-        :param including_anchor: Whether you want to include the anchor visit or not, default=False
+        :param including_end: Whether you want to include the anchor visit or not, default=False
 
         :param mode: How you want to calculate the abstinence, "itt"=intention-to-treat (the default) or
             "ro"=responders-only
@@ -948,8 +998,9 @@ class AbstinenceCalculator:
 
         for subject_id in self.subject_ids:
             result = [subject_id]
-            start_date = self.visit_data.get_visit_dates(subject_id, quit_visit, grace_days, mode=mode)
-            end_dates = self.visit_data.get_visit_dates(subject_id, end_visits, including_anchor, mode=mode)
+            start_dates = self.visit_data.get_visit_dates(subject_id, quit_visit, grace_days, mode=mode)
+            start_date = start_dates[0] if start_dates else pd.NaT
+            end_dates = self.visit_data.get_visit_dates(subject_id, end_visits, including_end, mode=mode)
 
             for criterion_i, criterion in enumerate(criteria):
                 for end_date_i, end_date in enumerate(end_dates):
@@ -974,7 +1025,8 @@ class AbstinenceCalculator:
                                         lapse = record
                                         break
                                 else:
-                                    abstinent = 1
+                                    if subject_data['amount'].count() == int((end_date - start_date).days):
+                                        abstinent = 1
                             else:
                                 assert len(parsed_criterion) == 4
                                 cutoff_amount, cutoff_unit, window_amount, _ = parsed_criterion
@@ -982,18 +1034,28 @@ class AbstinenceCalculator:
                                 window_amount = int(float(window_amount))
                                 index_list = \
                                     subject_data.index[subject_data['amount'] > self.tlfb_data.abst_cutoff].tolist()
+                                print(f"subject id{subject_id} \n {subject_data} \n {index_list}")
+                                print("subject index:", subject_data.index)
                                 for j in index_list:
                                     one_window = range(j, j + window_amount)
+                                    print(f"one_window: {one_window}")
                                     lapse_tracking = 0
-                                    for elem_i, elem in enumerate(one_window):
+                                    for elem_i, elem in enumerate(one_window, j):
                                         if cutoff_unit == "days":
                                             lapse_tracking += elem in index_list
                                         else:
-                                            lapse_tracking += subject_data.loc[elem_i, "amount"]
+                                            if elem_i in subject_data.index:
+                                                lapse_tracking += subject_data.loc[elem_i, "amount"]
+                                        print("lapse_tracking: ", lapse_tracking)
                                         if lapse_tracking > cutoff_amount:
-                                            lapse = subject_data.iloc[elem_i, :]
-                                            break
-                                else:
+                                            if elem_i in subject_data.index:
+                                                lapse = subject_data.loc[elem_i, :]
+                                                print('lapse is:', lapse)
+                                                break
+                                    if lapse is not None:
+                                        break
+                                if (subject_data['amount'].count() == int((end_date - start_date).days)) and \
+                                        lapse is None:
                                     abstinent = 1
 
                     result.append(abstinent)
@@ -1036,23 +1098,6 @@ class AbstinenceCalculator:
             validated = True
         return validated
 
-    def _validate_abstinent_biochemically(self, subject_id, start_date, end_date, abstinent):
-        if abstinent:
-            if self.exceeded_cutoff is not None:
-                print(f"Try to correct Abstinence data get overridden for {subject_id}, {start_date!r}, {end_date!r}")
-                id_check = self.exceeded_cutoff['id'] == subject_id
-                start_check = self.exceeded_cutoff['date'] >= start_date
-                end_check = self.exceeded_cutoff['date'] < end_date
-                combined = id_check & start_check & end_check
-                print(id_check.sum(), start_check.sum(), end_check.sum(), combined.sum())
-                subject_exceeded = self.exceeded_cutoff[(self.exceeded_cutoff['id'] == subject_id) &
-                                                        (self.exceeded_cutoff['date'] >= start_date) &
-                                                        (self.exceeded_cutoff['date'] < end_date)]
-                print(subject_exceeded)
-                if not subject_exceeded.empty:
-                    abstinent = 0
-        return abstinent
-
     def _score_continuous(self, subject_id, start_date, end_date, mode):
         abstinent = 0 if mode == 'itt' else np.nan
         lapse = None
@@ -1070,18 +1115,11 @@ class AbstinenceCalculator:
                 lapse_record = record
                 break
         abstinent = int(no_missing_data and (lapse_record is None))
-        if abstinent and self.exceeded_cutoff is not None:
-            subject_exceeded = self.exceeded_cutoff[(self.exceeded_cutoff['id'] == subject_id) &
-                                                    (self.exceeded_cutoff['date'] >= start_date) &
-                                                    (self.exceeded_cutoff['date'] < end_date)].reset_index()
-            if not subject_exceeded.empty:
-                abstinent = 0
-                lapse_record = subject_data[subject_data['date'] == subject_exceeded.loc[0, "date"]]
         return abstinent, lapse_record
 
     @staticmethod
     def _append_lapse_as_needed(lapses, lapse, abst_name):
-        if lapse:
+        if lapse is not None and len(lapse):
             lapse_id, lapse_date, lapse_amount = lapse.id, lapse.date, lapse.amount
             lapses.append((lapse_id, lapse_date, lapse_amount, abst_name))
 
@@ -1129,6 +1167,12 @@ beam_sas_abst = beam_sas_abst.rename(columns={'subjectid': 'id'}).set_index('id'
 # %%
 included_subjects = pd.read_csv("beam_subjects.csv", usecols=['SubjectID']).iloc[:, 0].to_list()
 
+biochemical_data = TLFBData("beam_co.csv", included_subjects=included_subjects, abst_cutoff=4)
+biochemical_data.profile_data()
+biochemical_data.interpolate_biochemical_data(0.5, 1)
+biochemical_data.drop_na_records()
+biochemical_data.check_duplicates()
+
 tlfb_data = TLFBData("beam_tlfb.csv", included_subjects=included_subjects)
 tlfb_sample_summary, tlfb_subject_summary = tlfb_data.profile_data()
 tlfb_sample_summary.to_csv("beam_tlfb_sample_summary.csv")
@@ -1136,11 +1180,7 @@ tlfb_subject_summary.to_csv("beam_tlfb_subject_summary.csv")
 tlfb_data.drop_na_records()
 tlfb_data.check_duplicates()
 tlfb_data.recode_data()
-tlfb_data.impute_data()
-
-biochemical_data = TLFBData("beam_co.csv", included_subjects=included_subjects, abst_cutoff=4)
-biochemical_data.profile_data()
-biochemical_data.interpolate_biochemical_data(0.5, 1)
+tlfb_data.impute_data(biochemical_data=biochemical_data)
 
 visit_data = VisitData("beam_visit.csv", included_visits=list(range(11)), included_subjects=included_subjects)
 visit_data.profile_data()
@@ -1156,10 +1196,10 @@ abst_cal.check_data_availability()
 
 # abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs')
 # abst_cal.abstinence_cont(4, [5, 6, 7, 8, 9, 10])
-abst_cal.abstinence_pp([9, 10], 7)
+# abst_cal.abstinence_pp([9, 10], 7)
 
-abst_pp, lapses_pp = abst_cal.abstinence_pp([9, 10], 7)
-abst_pros, lapses_pros = abst_cal.abstinence_prolonged(4, [9, 10], '6 cigs')
+abst_pp, lapses_pp = abst_cal.abstinence_pp([9, 10], 7, including_end=True)
+abst_pros, lapses_pros = abst_cal.abstinence_prolonged(4, [9, 10], '5 cigs')
 abst_prol, lapses_prol = abst_cal.abstinence_prolonged(4, [9, 10], False)
 
 
@@ -1168,24 +1208,16 @@ comparison = pd.concat([beam_sas_abst, abst_pp, abst_pros, abst_prol], axis=1)
 
 comparison['pp7_v9_same'] = comparison['itt_pp7_v9'] == comparison['abst_EOT_7dpp']
 comparison['pp7_v10_same'] = comparison['itt_pp7_v10'] == comparison['abst_M3_7dpp']
-comparison['pros_v9_same'] = comparison['itt_prolonged_6_cigs_v9'] == comparison['abst_EOT_pros']
-comparison['pros_v10_same'] = comparison['itt_prolonged_6_cigs_v10'] == comparison['abst_M3_pros']
+comparison['pros_v9_same'] = comparison['itt_prolonged_5_cigs_v9'] == comparison['abst_EOT_pros']
+comparison['pros_v10_same'] = comparison['itt_prolonged_5_cigs_v10'] == comparison['abst_M3_pros']
 comparison['prol_v9_same'] = comparison['itt_prolonged_False_v9'] == comparison['abst_EOT_prol']
 comparison['prol_v10_same'] = comparison['itt_prolonged_False_v10'] == comparison['abst_M3_prol']
 
-comparison['pp7_v9_same'].value_counts()
-comparison['pp7_v10_same'].value_counts()
-comparison['pros_v9_same'].value_counts()
-comparison['pros_v10_same'].value_counts()
-comparison['prol_v9_same'].value_counts()
-comparison['prol_v10_same'].value_counts()
+print(comparison['pp7_v9_same'].value_counts())
+print(comparison['pp7_v10_same'].value_counts())
+print(comparison['pros_v9_same'].value_counts())
+print(comparison['pros_v10_same'].value_counts())
+print(comparison['prol_v9_same'].value_counts())
+print(comparison['prol_v10_same'].value_counts())
 
-
-# lapses_pp.to_csv('beam_lapses.csv')
-
-df = biochemical_data.data
-min_date = df['date'].min()
-
-mask = (df['id'] == 430005) & (df['date'] >= min_date)
-mask.sum()
-df[mask]
+abst_prolonged_mixed, lapses_mixed = abst_cal.abstinence_prolonged(4, [9], '5 cigs/7 days')
