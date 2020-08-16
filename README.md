@@ -3,7 +3,7 @@
 A Python package to calculate abstinence results using the timeline follow back interview data
 
 ## Installation
-Install the package using the pip tool 
+Install the package using the pip tool
 
 ```
 pip install abstcal

@@ -1,6 +1,5 @@
 # %%
 import warnings
-from abc import abstractmethod
 from enum import Enum
 from statistics import mean
 from collections import namedtuple
@@ -34,8 +33,21 @@ class InputArgumentError(AbstinenceCalculatorError):
 
 
 # %%
-def show_warning(warning_message):
+def _show_warning(warning_message):
     warnings.warn(warning_message)
+
+
+def read_subject_ids(filepath, has_header=True):
+    """
+
+    :param filepath: Union[str, path], the path to the file, which has the list of subjects that you want to
+        use in later steps. Note that the list of subjects should be in the long format - just one column
+
+    :param has_header: bool, whether the file has a header or not, by default, True
+
+    :return: list, the list of subjects
+    """
+    return pd.read_csv(filepath, header='infer' if has_header else None).iloc[:, 0].to_list()
 
 
 # %%
@@ -54,16 +66,6 @@ class CalculatorData:
     subject_ids: set
     _index_keys: list
     _value_key: str
-
-    def __init__(self, filepath):
-        df = CalculatorData.read_data_from_path(filepath)
-        self.data = self._validated_data(df)
-        self.subject_ids = set(self.data['id'].unique())
-
-    @staticmethod
-    @abstractmethod
-    def _validated_data(df):
-        raise NotImplementedError
 
     def check_duplicates(self, duplicate_kept="max"):
         """
@@ -84,8 +86,8 @@ class CalculatorData:
         duplicated_indices = self.data.duplicated(self._index_keys, keep=False)
         duplicates = self.data.loc[duplicated_indices, :].sort_values(by=self._index_keys, ignore_index=True)
 
-        if duplicate_kept is None or duplicates.shape[0] < 1:
-            return duplicates
+        if duplicate_kept is None or duplicates.empty:
+            return 0
 
         if duplicate_kept in ("min", "max"):
             self.data.sort_values(by=[*self._index_keys, self._value_key], inplace=True)
@@ -145,22 +147,33 @@ class CalculatorData:
             warning_message = f"The {data_name} data does not appear to have the needed columns: {col_names}. " \
                               f"It has been renamed in such order for calculation purposes. If your columns are not " \
                               f"in this order, and you'll encounter errors in later calculation steps."
-            show_warning(warning_message)
+            _show_warning(warning_message)
             df.columns = needed_cols_ordered
 
 
 # %%
 class TLFBData(CalculatorData):
-    def __init__(self, filepath):
+    def __init__(self, filepath, included_subjects="all", abst_cutoff=0):
         """
         Create the instance object for the TLFB data
 
         :param filepath: Union[str, path], the file path to the TLFB data
 
+        :param included_subjects: Union[list, tuple], the list of subject ids that are included in the dataset,
+            the default option "all" means that all subjects in the dataset will be used
+
+        :param abst_cutoff: Union[float, int], the cutoff used to determine if a TLFB record is abstinent or not
+
         """
-        super().__init__(filepath)
+        df = super().read_data_from_path(filepath)
+        self.data = self._validated_data(df)
+        if included_subjects and included_subjects != "all":
+            self.data = self.data.loc[self.data["id"].isin(included_subjects), :].reset_index(drop=True)
+
         self._index_keys = ['id', 'date']
         self._value_key = 'amount'
+        self.subject_ids = set(self.data['id'].unique())
+        self.abst_cutoff = abst_cutoff
 
     @staticmethod
     def _validated_data(df):
@@ -190,19 +203,31 @@ class TLFBData(CalculatorData):
         return tlfb_summary_series, tlfb_subject_summary
 
     def _get_tlfb_sample_summary(self, min_amount_cutoff, max_amount_cutoff):
-        tlfb_summary = {'record_count': self.data.shape[0]}
-        key_names = 'subject_count min_date max_date min_amount max_amount'.split()
-        col_names = 'id date date amount amount'.split()
-        func_names = 'nunique min max min max'.split()
+        record_count = self.data.shape[0]
+        subject_count = self.data['id'].nunique()
+        record_counts = self.data.groupby('id').size()
+        record_count_min, record_count_max = record_counts.min(), record_counts.max()
+        tlfb_summary = {'record_count': record_count,
+                        'subject_count': subject_count,
+                        'records_per_subject_mean': int(record_count / subject_count),
+                        'records_per_subject_range': f"{record_count_min} - {record_count_max}"}
+        key_names = 'min_date max_date min_amount max_amount'.split()
+        col_names = 'date date amount amount'.split()
+        func_names = 'min max min max'.split()
         for key_name, col_name, func_name in zip(key_names, col_names, func_names):
             func = getattr(pd.Series, func_name)
             tlfb_summary[key_name] = func(self.data[col_name])
 
-        sorted_tlfb_data = \
+        max_sorted_tlfb_data = \
             self.data.sort_values(by=['amount'], ascending=False).reset_index(drop=True).iloc[0:5, :].copy()
-        sorted_tlfb_data['date'] = sorted_tlfb_data['date'].dt.strftime('%m/%d/%Y')
-        tlfb_summary['max_amount_5_records'] = \
-            [tuple(x) for x in sorted_tlfb_data.iloc[0:5, :].values]
+        max_sorted_tlfb_data['date'] = max_sorted_tlfb_data['date'].dt.strftime('%m/%d/%Y')
+        tlfb_summary['max_amount_5_records'] = [tuple(x) for x in max_sorted_tlfb_data.values]
+
+        min_sorted_tlfb_data = \
+            self.data.dropna().sort_values(by=['amount']).reset_index(drop=True).iloc[0:5, :].copy()
+        min_sorted_tlfb_data['date'] = min_sorted_tlfb_data['date'].dt.strftime('%m/%d/%Y')
+        tlfb_summary['min_amount_5_records'] = [tuple(x) for x in min_sorted_tlfb_data.values]
+
         count_key_names = 'missing_subject_count missing_date_count missing_amount_count duplicate_count'.split()
         columns = [self.data['id'].isna(),
                    self.data['date'].isna(),
@@ -240,6 +265,49 @@ class TLFBData(CalculatorData):
         summary_df.columns = col_names
         return summary_df.fillna(0)
 
+    def interpolate_biochemical_data(self, half_life_in_days, maximum_days_to_interpolate):
+        """
+        Interpolate the biochemical data
+
+        :param half_life_in_days: Union[float, int]
+            The half-life of the biochemical measure to interpolate the days preceding a non-abstinent day
+
+        :param maximum_days_to_interpolate: int, The maximum number of days to interpolate
+
+        :return: None
+        """
+        if half_life_in_days <= 0 or maximum_days_to_interpolate < 1 or \
+                not isinstance(maximum_days_to_interpolate, int):
+            InputArgumentError("The half life of the biochemical should be greater than 0, and the maximum number of "
+                               "days to interpolate should be a positive integer")
+
+        if 'imputation_code' in self.data.columns:
+            self.data = self.data[self.data['imputation_code'] == 0]
+
+        self.data.sort_values(by=self._index_keys, inplace=True, ignore_index=True)
+        self.data['imputation_code'] = DataImputationCode.RAW.value
+
+        interpolated_records = []
+
+        for subject_id in sorted(self.subject_ids):
+            subject_data = self.data[self.data['id'] == subject_id]
+            interpolated_dates = set()
+            for row in subject_data.itertuples():
+                current_amount = row.amount
+                current_date = row.date
+                for day in range(1, maximum_days_to_interpolate+1):
+                    interpolated_date = current_date + timedelta(days=-day)
+                    if interpolated_date in interpolated_dates or current_amount < self.abst_cutoff:
+                        continue
+                    interpolated_amount = pow(2, day / half_life_in_days) * current_amount
+                    interpolated_record = \
+                        [subject_id, interpolated_date, interpolated_amount, DataImputationCode.IMPUTED.value]
+                    interpolated_dates.add(interpolated_date)
+                    interpolated_records.append(interpolated_record)
+
+        interpolated_df = pd.DataFrame(interpolated_records, columns=['id', 'date', 'amount', 'imputation_code'])
+        self.data = pd.concat([self.data, interpolated_df]).sort_values(by=self._index_keys, ignore_index=True)
+
     def recode_data(self, floor_amount=None, ceil_amount=None):
         """
         Recode the abnormal data of the TLFB dataset
@@ -263,9 +331,10 @@ class TLFBData(CalculatorData):
             outlier_count = pd.Series(self.data['amount'] > ceil_amount).sum()
             recode_summary[f'Number of outliers (> {ceil_amount})'] = outlier_count
             self.data['amount'] = self.data['amount'].map(lambda x: min(x, ceil_amount))
-        return recode_summary
+        if recode_summary:
+            return recode_summary
 
-    def impute_data(self, impute="linear"):
+    def impute_data(self, impute="linear", biochemical_data=None, trigger_amount=0):
         """
         Impute the TLFB data
 
@@ -277,6 +346,12 @@ class TLFBData(CalculatorData):
             before and after the missing interval
             Numeric value (int or float): impute the missing TLFB data using the specified value
 
+        :type biochemical_data: TLFBData
+        :param biochemical_data: The biochemical data that is used to impute the self-reported data
+
+        :param trigger_amount: Union[float, int]
+            The amount, below which the TLFB data interpolation will be triggered based on the biochemical data
+
         :return: Summary of the imputation
         """
         if impute is None or str(impute).lower() == "none":
@@ -284,8 +359,27 @@ class TLFBData(CalculatorData):
         if not (impute in ("uniform", "linear") or impute.isnumeric()):
             raise InputArgumentError("The imputation mode can only be None, 'uniform', 'linear', "
                                      "or a numeric value.")
+        if 'imputation_code' in self.data.columns:
+            self.data = self.data[self.data['imputation_code'] == 0]
+
         self.data.sort_values(by=self._index_keys, inplace=True, ignore_index=True)
         self.data['imputation_code'] = DataImputationCode.RAW.value
+
+        if biochemical_data is not None:
+            _biochemical_data = biochemical_data.data[["id", "amount"]].rename(columns={"amount": "chemical_amount"})
+            _merged = self.data.merge(_biochemical_data, on="id")
+
+            def interpolate_tlfb(row):
+                amount = row['amount']
+                imputation_code = row['imputation_code']
+                if row['amount'] <= trigger_amount and row['chemical_amount'] > biochemical_data.biochemical_cutoff:
+                    amount = trigger_amount
+                    imputation_code = DataImputationCode.IMPUTED.value
+                return amount, imputation_code
+
+            _merged[['amount', 'imputation_code']] = _merged.apply(interpolate_tlfb, axis=1)
+            self.data = _merged
+
         self.data['diff_days'] = self.data.groupby(['id'])['date'].diff().map(
             lambda x: x.days if pd.notnull(x) else 1)
         missing_data = self.data[self.data['diff_days'] > 1.0]
@@ -337,7 +431,7 @@ class TLFBData(CalculatorData):
 
     def get_subject_data(self, subject_id, start_date, end_date, mode):
         df = self.data
-        if mode != "itt":
+        if mode != "itt" and 'imputation_code' in self.data.columns:
             df = self.data.loc[self.data['imputation_code'] == DataImputationCode.RAW.value, :]
         subject_data = df[(df['id'] == subject_id) &
                           (start_date <= df['date']) &
@@ -347,7 +441,7 @@ class TLFBData(CalculatorData):
 
 # %%
 class VisitData(CalculatorData):
-    def __init__(self, filepath, data_format="long"):
+    def __init__(self, filepath, data_format="long", included_visits="all", included_subjects="all"):
         """
         Create the instance object for the visit data
 
@@ -357,17 +451,30 @@ class VisitData(CalculatorData):
             long: the data should have three columns, id, visit, and date
             wide: the data have multiple columns and one row per subject, the first column has to be named 'id'
                 and the remaining columns are visits with values being the dates
+
+        :type included_visits: Union[str, list, tuple]
+        :param included_visits: Union[str, list, tuple], the list of visits that are included in the dataset, the
+            default option "all" means that all visits in the dataset will be used
+
+        :param included_subjects: Union[list, tuple], the list of subject ids that are included in the dataset,
+            the default option "all" means that all subjects in the dataset will be used
+
         """
         if data_format == "wide":
-            df_wide = CalculatorData.read_data_from_path(filepath)
-            df_long = df_wide.pivot(index="id", columns="visit", values="date")
-            self.data = CalculatorData._validated_data(df_long)
-            self.subject_ids = set(self.data['id'].unique())
+            df_wide = super().read_data_from_path(filepath)
+            df_long = df_wide.melt(id_vars="id")
         else:
-            super().__init__(filepath)
+            df_long = super().read_data_from_path(filepath)
+        self.data = self._validated_data(df_long)
+        if included_visits and included_visits != "all":
+            self.data = self.data.loc[self.data["visit"].isin(included_visits), :]
+        if included_subjects and included_subjects != "all":
+            self.data = self.data.loc[self.data["id"].isin(included_subjects), :]
+        self.data.reset_index(drop=True, inplace=True)
         self._index_keys = ['id', 'visit']
         self._value_key = 'date'
         self.visits = set(self.data['visit'].unique())
+        self.subject_ids = set(self.data['id'].unique())
 
     @staticmethod
     def _validated_data(df):
@@ -375,7 +482,7 @@ class VisitData(CalculatorData):
         df['date'] = pd.to_datetime(df['date'], infer_datetime_format=True)
         return df
 
-    def profile_data(self, min_date_cutoff=None, max_date_cutoff=None, expected_visit_order="inferred"):
+    def profile_data(self, min_date_cutoff=None, max_date_cutoff=None, expected_visit_order="infer"):
         """
         Profile the visit data
 
@@ -389,11 +496,12 @@ class VisitData(CalculatorData):
             When it's set None, outlier detection won't consider the higher bound
             When it's str, it should be able to be casted to a datetime object, such as '10/23/2020'
 
-        :param expected_visit_order: Union["inferred", list, None], default "inferred"
+        :type expected_visit_order: object
+        :param expected_visit_order: Union["infer", list, None], default "infer"
             The expected order of the visits, such that when dates are out of order can be detected
             The list of visit names should match the actual visits in the dataset
             When None, no checking will be performed
-            The default is inferred, and it means that the order of the visits is sorted based on its numeric or
+            The default is infer, and it means that the order of the visits is sorted based on its numeric or
             alphabetic order
 
         :return: Tuple, summaries of the visit data at the sample and subject level
@@ -404,6 +512,25 @@ class VisitData(CalculatorData):
         visit_subject_summary = self._get_visit_subject_summary(casted_min_date_cutoff, casted_max_date_cutoff,
                                                                 expected_visit_order)
         return visit_summary_series, visit_subject_summary
+
+    def get_out_of_order_visit_data(self, expected_visit_order='infer'):
+        """
+        :type expected_visit_order: object
+        :param expected_visit_order: Union["infer", list, None], default "infer"
+            The expected order of the visits, such that when dates are out of order can be detected
+            The list of visit names should match the actual visits in the dataset
+            When None, no checking will be performed
+            The default is infer, and it means that the order of the visits is sorted based on its numeric or
+            alphabetic order
+
+        :return: DataFrame or None
+        """
+        subject_summary = self._get_visit_subject_summary(expected_visit_order=expected_visit_order).reset_index()
+        out_of_order_ids = \
+            subject_summary.loc[subject_summary['visit_dates_out_of_order'], "id"].to_list()
+        out_of_order_df = self.data.loc[self.data['id'].isin(out_of_order_ids), :].sort_values(by=['id', 'visit'])
+        if not out_of_order_df.empty:
+            return out_of_order_df
 
     def _get_visit_sample_summary(self, min_date_cutoff, max_date_cutoff):
         visit_summary = {'record_count': self.data.shape[0]}
@@ -454,10 +581,14 @@ class VisitData(CalculatorData):
                 [tuple(x) for x in reversed(visit_dates.loc[rows - 5:rows - 1, ['id', 'interval_to_anchor']].values)]
 
         visit_record_counts = self.data.groupby(['visit'])['date'].count().to_dict()
-        visit_summary.update({f"visit_{visit}_record_count": count for visit, count in visit_record_counts.items()})
+        subject_count = len(self.subject_ids)
+        visit_summary.update(
+            {f"visit_{visit}_retention": f"{count} ({count / subject_count:.2%})"
+             for visit, count in visit_record_counts.items()}
+        )
         return pd.Series(visit_summary)
 
-    def _get_visit_subject_summary(self, min_date_cutoff, max_date_cutoff, expected_visit_order):
+    def _get_visit_subject_summary(self, min_date_cutoff=None, max_date_cutoff=None, expected_visit_order='infer'):
         visit_dates_amounts = self.data.groupby('id').agg({
             "date": ["count", "min", "max"]
         })
@@ -487,17 +618,17 @@ class VisitData(CalculatorData):
             if isinstance(expected_visit_order, list):
                 self.data['visit'] = self.data['visit'].map(
                     {visit: i for i, visit in enumerate(expected_visit_order)})
-            elif isinstance(expected_visit_order, str) and expected_visit_order != 'inferred':
-                show_warning("Supported options for expected_visit_order are list of visits, None, and inferred. "
-                             "The expected visit order is inferred to check if the dates are in the correct order.")
-            sorted_visit_data = self.data.sort_values(by=['id', 'visit']).reset_index()
+            elif isinstance(expected_visit_order, str) and expected_visit_order != 'infer':
+                _show_warning("Supported options for expected_visit_order are list of visits, None, and infer. "
+                              "The expected visit order is inferred to check if the dates are in the correct order.")
+            sorted_visit_data = self.data.sort_values(by=['id', 'visit'], ignore_index=True)
             sorted_visit_data['ascending'] = sorted_visit_data.groupby(['id'])['date'].diff().map(
-                lambda x: True if x is pd.NaT or x.days > 0 else False
+                lambda x: True if x is pd.NaT or x.days >= 0 else False
             )
             visits_out_of_order = sorted_visit_data.groupby(['id'])['ascending'].all().map(lambda x: not x)
             if visits_out_of_order.sum() > 0:
-                show_warning(f"Please note that some subjects (n={visits_out_of_order.sum()}) appear to have their "
-                             f"visit dates out of the correct order. You can find out who they are in the visit data"
+                _show_warning(f"Please note that some subjects (n={visits_out_of_order.sum()}) appear to have their "
+                             f"visit dates out of the correct order. You can find out who they are in the visit data "
                              f"summary by subject. Please fix them if applicable.")
             return visits_out_of_order
 
@@ -529,9 +660,13 @@ class VisitData(CalculatorData):
         return recode_summary
 
     # noinspection PyTypeChecker
-    def impute_data(self, impute='freq'):
+    def impute_data(self, anchor_visit='infer', impute='freq'):
         """
         Impute any missing visit data.
+
+        :type anchor_visit: object
+        :param anchor_visit: The anchor visit, which needs to exist for all subjects and the date of which will be
+            used to impute the missing visit dates
 
         :param impute: Union["freq", "mean", None], how the missing visit data are imputed
         None: no imputation
@@ -540,22 +675,29 @@ class VisitData(CalculatorData):
             Both imputation methods assume that the visit structure is the same among all subjects. It will first find
             the earliest visit as the anchor date, impute any missing visit dates either using the average or the most
             frequent interval. Please note the anchor dates can't be missing.
+
+        :return DataFrame
         """
+
         if impute is None or str(impute).lower() == "none":
             return
         if impute not in ('freq', 'mean'):
             raise InputArgumentError('You can only specify the imputation method to be "freq" or "mean".')
 
+        if 'imputation_code' in self.data.columns:
+            self.data = self.data[self.data['imputation_code'] == 0]
+
         self.data = self.data.sort_values(by=self._index_keys, ignore_index=True)
-        min_date_indices = self.data.groupby(['id'])['date'].idxmin()
-        anchor_visit = self.data.loc[min_date_indices, 'visit'].value_counts().idxmax()
+        if anchor_visit == 'infer':
+            min_date_indices = self.data.groupby(['id'])['date'].idxmin()
+            anchor_visit = self.data.loc[min_date_indices, 'visit'].value_counts().idxmax()
         visit_ids = sorted(self.subject_ids)
         anchor_ids = set(self.data.loc[self.data['visit'] == anchor_visit, 'id'].unique())
         missing_anchor_ids = set(visit_ids) - anchor_ids
         if missing_anchor_ids:
             message = f"Subjects {missing_anchor_ids} are missing anchor visit {anchor_visit}. " \
                       f"There might be problems calculating abstinence data for these subjects."
-            show_warning(message)
+            _show_warning(message)
         ids_s = pd.Series(visit_ids, name='id')
         anchor_dates = self.data.loc[self.data['visit'] == anchor_visit, ['id', 'date']].\
             rename({'date': 'anchor_date'}, axis=1)
@@ -615,7 +757,7 @@ class VisitData(CalculatorData):
 
 # %%
 class AbstinenceCalculator:
-    def __init__(self, tlfb_data: TLFBData, visit_data: VisitData, abst_cutoff=0):
+    def __init__(self, tlfb_data: TLFBData, visit_data: VisitData, biochemical_data: TLFBData = None):
         """
         Create an instance object to calculate abstinence
 
@@ -623,14 +765,17 @@ class AbstinenceCalculator:
 
         :param visit_data: VisitData, the visit data
 
-        :param abst_cutoff: Union[int, float], default 0
-            The cutoff for abstinence, below or equal to which is considered to be abstinent
+        :param biochemical_data: TLFBData, the biochemical data
 
         :return: None
         """
         self.tlfb_data = tlfb_data
         self.visit_data = visit_data
-        self.abst_cutoff = abst_cutoff
+        self.biochemical_data = biochemical_data
+        self.exceeded_cutoff = None
+        if biochemical_data is not None:
+            condition = biochemical_data.data['amount'] > biochemical_data.abst_cutoff
+            self.exceeded_cutoff = biochemical_data.data[condition].sort_values(by=['id', 'date'], ignore_index=True)
         self.subject_ids = sorted(tlfb_data.subject_ids & tlfb_data.subject_ids)
 
     def check_data_availability(self):
@@ -641,7 +786,7 @@ class AbstinenceCalculator:
             rename({0: "subject_count"}, axis=1)
         return freq_data
 
-    def abstinence_cont(self, start_visit, end_visits, abst_var_names='inferred', including_end=False, mode="itt"):
+    def abstinence_cont(self, start_visit, end_visits, abst_var_names='infer', including_end=False, mode="itt"):
         """
         Calculates the continuous abstinence for the time window.
 
@@ -651,7 +796,7 @@ class AbstinenceCalculator:
             a list of the visits or a single visit, which should all belong to the visits in the visit dataset
 
         :param abst_var_names: Union[str, list], the name(s) of the abstinence variable(s)
-            "inferred": the default option, the name(s) will be inferred,
+            "infer": the default option, the name(s) will be inferred,
             Note that when specified, the number of abstinence variable names should match the number of end visits
 
         :param including_end: bool, whether you want to include the end visit or not, default=False
@@ -689,7 +834,7 @@ class AbstinenceCalculator:
 
         return abstinence_df, lapses_df
 
-    def abstinence_pp(self, end_visits, days, abst_var_names='inferred', including_anchor=False, mode="itt"):
+    def abstinence_pp(self, end_visits, days, abst_var_names='infer', including_anchor=False, mode="itt"):
         """
         Calculate the point-prevalence abstinence using the end visit's date.
 
@@ -745,17 +890,7 @@ class AbstinenceCalculator:
 
         return abstinence_df, lapses_df
 
-    def _score_continuous(self, subject_id, start_date, end_date, mode):
-        abstinent = np.nan
-        lapse = None
-
-        if AbstinenceCalculator._validate_dates(subject_id, start_date, end_date):
-            subject_data = self.tlfb_data.get_subject_data(subject_id, start_date, end_date, mode)
-            abstinent, lapse = self._continuous_abst(subject_data, start_date, end_date)
-
-        return abstinent, lapse
-
-    def abstinence_prolonged(self, quit_visit, end_visits, lapse_criterion, grace_days=14, abst_var_names='inferred',
+    def abstinence_prolonged(self, quit_visit, end_visits, lapse_criterion, grace_days=14, abst_var_names='infer',
                              including_anchor=False, mode="itt"):
         """
         Calculate the prolonged abstinence using the time window
@@ -799,8 +934,9 @@ class AbstinenceCalculator:
                                              "criteria, please refer to the help menu.")
             else:
                 assert criterion in (False,)
-            abst_names = \
-                AbstinenceCalculator._infer_abst_var_names(end_visits, abst_var_names, f'{mode}_prolonged_{criterion}')
+            formatted_criterion = criterion.replace(" ", "_") if isinstance(criterion, str) else criterion
+            abst_names = AbstinenceCalculator.\
+                _infer_abst_var_names(end_visits, abst_var_names, f'{mode}_prolonged_{formatted_criterion}')
             all_abst_names.extend(abst_names)
 
         if len(end_visits) * len(criteria) != len(all_abst_names):
@@ -817,13 +953,13 @@ class AbstinenceCalculator:
 
             for criterion_i, criterion in enumerate(criteria):
                 for end_date_i, end_date in enumerate(end_dates):
-                    abstinent = np.nan
+                    abstinent = 0 if mode == 'itt' else np.nan
                     lapse = None
 
                     if AbstinenceCalculator._validate_dates(subject_id, start_date, end_date):
                         subject_data = self.tlfb_data.get_subject_data(subject_id, start_date, end_date, mode)
                         if not criterion:
-                            abstinent, lapse = self._continuous_abst(subject_data, start_date, end_date)
+                            abstinent, lapse = self._continuous_abst(subject_id, start_date, end_date, mode)
                         else:
                             parsed_criterion = [x for parts in criterion.split("/") for x in parts.split()]
                             if len(parsed_criterion) == 2:
@@ -833,7 +969,7 @@ class AbstinenceCalculator:
                                     if parsed_criterion[-1] != "days":
                                         lapse_tracking += record.amount
                                     else:
-                                        lapse_tracking += (record.amount > self.abst_cutoff)
+                                        lapse_tracking += (record.amount > self.tlfb_data.abst_cutoff)
                                     if lapse_tracking >= lapse_threshold:
                                         lapse = record
                                         break
@@ -844,7 +980,8 @@ class AbstinenceCalculator:
                                 cutoff_amount, cutoff_unit, window_amount, _ = parsed_criterion
                                 cutoff_amount = float(cutoff_amount)
                                 window_amount = int(float(window_amount))
-                                index_list = subject_data.index[subject_data['amount'] > self.abst_cutoff].tolist()
+                                index_list = \
+                                    subject_data.index[subject_data['amount'] > self.tlfb_data.abst_cutoff].tolist()
                                 for j in index_list:
                                     one_window = range(j, j + window_amount)
                                     lapse_tracking = 0
@@ -879,7 +1016,7 @@ class AbstinenceCalculator:
 
     @staticmethod
     def _infer_abst_var_names(end_visits, abst_var_names, prefix=''):
-        if abst_var_names == 'inferred':
+        if abst_var_names == 'infer':
             abst_names = [f"{prefix}_v{end_visit}" for end_visit in end_visits]
         else:
             abst_names = AbstinenceCalculator._listize_args(abst_var_names)
@@ -891,23 +1028,56 @@ class AbstinenceCalculator:
     def _validate_dates(subject_id, start_date, end_date):
         validated = False
         if start_date >= end_date:
-            show_warning(f"The end date of the time window for the subject {subject_id} {end_date} isn't later "
+            _show_warning(f"The end date of the time window for the subject {subject_id} {end_date} isn't later "
                          f"than the start date {start_date}. Please verify that the visit dates are correct.")
         elif pd.NaT in (start_date, end_date):
-            show_warning(f"Subject {subject_id} is missing some of the date information.")
+            _show_warning(f"Subject {subject_id} is missing some of the date information.")
         else:
             validated = True
         return validated
 
-    def _continuous_abst(self, subject_data, start_date, end_date):
+    def _validate_abstinent_biochemically(self, subject_id, start_date, end_date, abstinent):
+        if abstinent:
+            if self.exceeded_cutoff is not None:
+                print(f"Try to correct Abstinence data get overridden for {subject_id}, {start_date!r}, {end_date!r}")
+                id_check = self.exceeded_cutoff['id'] == subject_id
+                start_check = self.exceeded_cutoff['date'] >= start_date
+                end_check = self.exceeded_cutoff['date'] < end_date
+                combined = id_check & start_check & end_check
+                print(id_check.sum(), start_check.sum(), end_check.sum(), combined.sum())
+                subject_exceeded = self.exceeded_cutoff[(self.exceeded_cutoff['id'] == subject_id) &
+                                                        (self.exceeded_cutoff['date'] >= start_date) &
+                                                        (self.exceeded_cutoff['date'] < end_date)]
+                print(subject_exceeded)
+                if not subject_exceeded.empty:
+                    abstinent = 0
+        return abstinent
+
+    def _score_continuous(self, subject_id, start_date, end_date, mode):
+        abstinent = 0 if mode == 'itt' else np.nan
+        lapse = None
+        if AbstinenceCalculator._validate_dates(subject_id, start_date, end_date):
+            abstinent, lapse = self._continuous_abst(subject_id, start_date, end_date, mode)
+        return abstinent, lapse
+
+    def _continuous_abst(self, subject_id, start_date, end_date, mode):
+        subject_data = self.tlfb_data.get_subject_data(subject_id, start_date, end_date, mode)
         lapse_record = None
         days_to_check = int((end_date - start_date).days)
         no_missing_data = subject_data['amount'].count() == days_to_check
         for record in subject_data.itertuples():
-            if record.amount > self.abst_cutoff:
+            if record.amount > self.tlfb_data.abst_cutoff:
                 lapse_record = record
                 break
-        return int(no_missing_data and (lapse_record is not None)), lapse_record
+        abstinent = int(no_missing_data and (lapse_record is None))
+        if abstinent and self.exceeded_cutoff is not None:
+            subject_exceeded = self.exceeded_cutoff[(self.exceeded_cutoff['id'] == subject_id) &
+                                                    (self.exceeded_cutoff['date'] >= start_date) &
+                                                    (self.exceeded_cutoff['date'] < end_date)].reset_index()
+            if not subject_exceeded.empty:
+                abstinent = 0
+                lapse_record = subject_data[subject_data['date'] == subject_exceeded.loc[0, "date"]]
+        return abstinent, lapse_record
 
     @staticmethod
     def _append_lapse_as_needed(lapses, lapse, abst_name):
@@ -940,3 +1110,82 @@ class AbstinenceCalculator:
         :return: None
         """
         pd.concat(dfs, axis=0).to_csv(filepath, index=False)
+
+
+# %%
+beam_sas_abst = pd.read_sas("beam_abst_wide_v2mac.sas7bdat")
+beam_sas_abst = beam_sas_abst.rename(columns={'subjectid': 'id'}).set_index('id')
+
+# beam_co = pd.read_sas("scored_co.sas7bdat")
+# beam_co.rename(columns={
+#     "SubjectID": 'id',
+#     'CO': 'amount',
+#     'EventNo': 'visit'}, inplace=True)
+# beam_co = beam_co.merge(visit_data.data, on=['id', 'visit'])
+# beam_co.drop(['visit'], axis=1, inplace=True)
+# beam_co.to_csv("beam_co.csv", index=False)
+
+
+# %%
+included_subjects = pd.read_csv("beam_subjects.csv", usecols=['SubjectID']).iloc[:, 0].to_list()
+
+tlfb_data = TLFBData("beam_tlfb.csv", included_subjects=included_subjects)
+tlfb_sample_summary, tlfb_subject_summary = tlfb_data.profile_data()
+tlfb_sample_summary.to_csv("beam_tlfb_sample_summary.csv")
+tlfb_subject_summary.to_csv("beam_tlfb_subject_summary.csv")
+tlfb_data.drop_na_records()
+tlfb_data.check_duplicates()
+tlfb_data.recode_data()
+tlfb_data.impute_data()
+
+biochemical_data = TLFBData("beam_co.csv", included_subjects=included_subjects, abst_cutoff=4)
+biochemical_data.profile_data()
+biochemical_data.interpolate_biochemical_data(0.5, 1)
+
+visit_data = VisitData("beam_visit.csv", included_visits=list(range(11)), included_subjects=included_subjects)
+visit_data.profile_data()
+visit_data.get_out_of_order_visit_data()
+visit_data.drop_na_records()
+visit_data.check_duplicates()
+visit_data.recode_data()
+visit_data.impute_data(anchor_visit=1)
+visit_data.get_out_of_order_visit_data()
+
+abst_cal = AbstinenceCalculator(tlfb_data, visit_data)
+abst_cal.check_data_availability()
+
+# abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs')
+# abst_cal.abstinence_cont(4, [5, 6, 7, 8, 9, 10])
+abst_cal.abstinence_pp([9, 10], 7)
+
+abst_pp, lapses_pp = abst_cal.abstinence_pp([9, 10], 7)
+abst_pros, lapses_pros = abst_cal.abstinence_prolonged(4, [9, 10], '6 cigs')
+abst_prol, lapses_prol = abst_cal.abstinence_prolonged(4, [9, 10], False)
+
+
+# abst_pp.head()
+comparison = pd.concat([beam_sas_abst, abst_pp, abst_pros, abst_prol], axis=1)
+
+comparison['pp7_v9_same'] = comparison['itt_pp7_v9'] == comparison['abst_EOT_7dpp']
+comparison['pp7_v10_same'] = comparison['itt_pp7_v10'] == comparison['abst_M3_7dpp']
+comparison['pros_v9_same'] = comparison['itt_prolonged_6_cigs_v9'] == comparison['abst_EOT_pros']
+comparison['pros_v10_same'] = comparison['itt_prolonged_6_cigs_v10'] == comparison['abst_M3_pros']
+comparison['prol_v9_same'] = comparison['itt_prolonged_False_v9'] == comparison['abst_EOT_prol']
+comparison['prol_v10_same'] = comparison['itt_prolonged_False_v10'] == comparison['abst_M3_prol']
+
+comparison['pp7_v9_same'].value_counts()
+comparison['pp7_v10_same'].value_counts()
+comparison['pros_v9_same'].value_counts()
+comparison['pros_v10_same'].value_counts()
+comparison['prol_v9_same'].value_counts()
+comparison['prol_v10_same'].value_counts()
+
+
+# lapses_pp.to_csv('beam_lapses.csv')
+
+df = biochemical_data.data
+min_date = df['date'].min()
+
+mask = (df['id'] == 430005) & (df['date'] >= min_date)
+mask.sum()
+df[mask]
