@@ -474,7 +474,7 @@ class TLFBData(CalculatorData):
 
 # %%
 class VisitData(CalculatorData):
-    def __init__(self, filepath, data_format="long", included_visits="all", included_subjects="all"):
+    def __init__(self, filepath, data_format="long", expected_ordered_visits="infer", included_subjects="all"):
         """
         Create the instance object for the visit data
 
@@ -485,9 +485,13 @@ class VisitData(CalculatorData):
             wide: the data have multiple columns and one row per subject, the first column has to be named 'id'
                 and the remaining columns are visits with values being the dates
 
-        :type included_visits: Union[str, list, tuple]
-        :param included_visits: Union[str, list, tuple], the list of visits that are included in the dataset, the
-            default option "all" means that all visits in the dataset will be used
+        :type expected_ordered_visits: object
+        :param expected_ordered_visits: Union["infer", list, None], default "infer"
+            The expected order of the visits, such that when dates are out of order can be detected
+            The list of visit names should match the actual visits in the dataset
+            When None, no checking will be performed when you profile the visit data
+            The default is infer, and it means that the order of the visits is sorted based on its numeric or
+            alphabetic order
 
         :param included_subjects: Union[list, tuple], the list of subject ids that are included in the dataset,
             the default option "all" means that all subjects in the dataset will be used
@@ -499,15 +503,22 @@ class VisitData(CalculatorData):
         else:
             df_long = super().read_data_from_path(filepath)
         self.data = self._validated_data(df_long)
-        if included_visits and included_visits != "all":
-            self.data = self.data.loc[self.data["visit"].isin(included_visits), :]
-        if included_subjects and included_subjects != "all":
+        if included_subjects != "all":
             self.data = self.data.loc[self.data["id"].isin(included_subjects), :]
-        self.data.reset_index(drop=True, inplace=True)
         self._index_keys = ['id', 'visit']
         self._value_key = 'date'
+        if expected_ordered_visits is not None:
+            if expected_ordered_visits != "infer":
+                self.expected_ordered_visits = expected_ordered_visits
+                self.data = self.data.loc[self.data["visit"].isin(expected_ordered_visits), :]
+            else:
+                self.expected_ordered_visits = sorted(self.data['visit'].unique())
+        else:
+            self.expected_ordered_visits = None
+
         self.visits = set(self.data['visit'].unique())
         self.subject_ids = set(self.data['id'].unique())
+        self.data.reset_index(drop=True, inplace=True)
 
     @staticmethod
     def _validated_data(df):
@@ -515,7 +526,7 @@ class VisitData(CalculatorData):
         df['date'] = pd.to_datetime(df['date'], infer_datetime_format=True)
         return df
 
-    def profile_data(self, min_date_cutoff=None, max_date_cutoff=None, expected_visit_order="infer"):
+    def profile_data(self, min_date_cutoff=None, max_date_cutoff=None):
         """
         Profile the visit data
 
@@ -529,41 +540,27 @@ class VisitData(CalculatorData):
             When it's set None, outlier detection won't consider the higher bound
             When it's str, it should be able to be casted to a datetime object, such as '10/23/2020'
 
-        :type expected_visit_order: object
-        :param expected_visit_order: Union["infer", list, None], default "infer"
-            The expected order of the visits, such that when dates are out of order can be detected
-            The list of visit names should match the actual visits in the dataset
-            When None, no checking will be performed
-            The default is infer, and it means that the order of the visits is sorted based on its numeric or
-            alphabetic order
-
         :return: Tuple, summaries of the visit data at the sample and subject level
         """
         casted_min_date_cutoff = pd.to_datetime(min_date_cutoff, infer_datetime_format=True)
         casted_max_date_cutoff = pd.to_datetime(max_date_cutoff, infer_datetime_format=True)
         visit_summary_series = self._get_visit_sample_summary(casted_min_date_cutoff, casted_max_date_cutoff)
-        visit_subject_summary = self._get_visit_subject_summary(casted_min_date_cutoff, casted_max_date_cutoff,
-                                                                expected_visit_order)
+        visit_subject_summary = self._get_visit_subject_summary(casted_min_date_cutoff, casted_max_date_cutoff)
         return visit_summary_series, visit_subject_summary
 
-    def get_out_of_order_visit_data(self, expected_visit_order='infer'):
+    def get_out_of_order_visit_data(self):
         """
-        :type expected_visit_order: object
-        :param expected_visit_order: Union["infer", list, None], default "infer"
-            The expected order of the visits, such that when dates are out of order can be detected
-            The list of visit names should match the actual visits in the dataset
-            When None, no checking will be performed
-            The default is infer, and it means that the order of the visits is sorted based on its numeric or
-            alphabetic order
+        Get the data with out of ordered visits
 
         :return: DataFrame or None
         """
-        subject_summary = self._get_visit_subject_summary(expected_visit_order=expected_visit_order).reset_index()
+        if self.expected_ordered_visits is None:
+            return pd.DataFrame()
+
+        subject_summary = self._get_visit_subject_summary().reset_index()
         out_of_order_ids = \
             subject_summary.loc[subject_summary['visit_dates_out_of_order'], "id"].to_list()
-        out_of_order_df = self.data.loc[self.data['id'].isin(out_of_order_ids), :].sort_values(by=['id', 'visit'])
-        if not out_of_order_df.empty:
-            return out_of_order_df
+        return self.data.loc[self.data['id'].isin(out_of_order_ids), :].sort_values(by=['id', 'visit'])
 
     def _get_visit_sample_summary(self, min_date_cutoff, max_date_cutoff):
         visit_summary = {'record_count': self.data.shape[0]}
@@ -616,7 +613,7 @@ class VisitData(CalculatorData):
         visit_record_counts = self.data.groupby(['visit'])['date'].count().to_dict()
         subject_count = len(self.subject_ids)
         visit_summary.update(
-            {f"visit_{visit}_retention": f"{count} ({count / subject_count:.2%})"
+            {f"visit_{visit}_attendance": f"{count} ({count / subject_count:.2%})"
              for visit, count in visit_record_counts.items()}
         )
         return pd.Series(visit_summary)
@@ -625,9 +622,22 @@ class VisitData(CalculatorData):
         _data = self.data
         if "imputation_code" in _data.columns:
             _data = self.data[self.data['imputation_code'] == 0]
+
+        last_attended_counts = _data.loc[_data.groupby('id')['date'].idxmax(), "visit"].value_counts().to_dict()
+
+        sorted_visits = self.expected_ordered_visits or sorted(self.visits)
+
+        tracking = dict()
+        remaining = len(self.subject_ids)
+        for i, visit in enumerate(sorted_visits):
+            losing = last_attended_counts.get(visit, 0)
+            tracking[visit] = remaining
+            remaining -= losing
+
+        retention_df = pd.Series(tracking).to_frame("subject_count")
+        retention_df.index.name = "visit"
+        retention_df.reset_index()
         subject_count = len(self.subject_ids)
-        retention_df = _data.groupby(['visit'], as_index=False)['date'].count()
-        retention_df.rename(columns={'date': "subject_count"}, inplace=True)
         retention_df['retention_rate'] = retention_df['subject_count'].map(
             lambda x: f"{x / subject_count:.2%}"
         )
@@ -636,7 +646,7 @@ class VisitData(CalculatorData):
         )
         return retention_df
 
-    def _get_visit_subject_summary(self, min_date_cutoff=None, max_date_cutoff=None, expected_visit_order='infer'):
+    def _get_visit_subject_summary(self, min_date_cutoff=None, max_date_cutoff=None):
         visit_dates_amounts = self.data.groupby('id').agg({
             "date": ["count", "min", "max"]
         })
@@ -654,20 +664,21 @@ class VisitData(CalculatorData):
             summary_dfs.append(self.data.loc[self.data['date'] > max_date_cutoff, :].groupby(
                 'id')['date'].agg('count'))
             col_names.append('outliers_date_high_count')
-        visit_dates_out_of_order = self._check_visit_order(expected_visit_order)
-        summary_dfs.append(visit_dates_out_of_order)
-        col_names.append('visit_dates_out_of_order')
+        visit_dates_out_of_order = self._check_visit_order()
+        if visit_dates_out_of_order is not None:
+            summary_dfs.append(visit_dates_out_of_order)
+            col_names.append('visit_dates_out_of_order')
         summary_df = pd.concat(summary_dfs, axis=1)
         summary_df.columns = col_names
         return summary_df.fillna(0)
 
-    def _check_visit_order(self, expected_visit_order):
-        if expected_visit_order is not None:
-            if isinstance(expected_visit_order, list):
+    def _check_visit_order(self):
+        if self.expected_ordered_visits is not None:
+            if isinstance(self.expected_ordered_visits, list):
                 self.data['visit'] = self.data['visit'].map(
-                    {visit: i for i, visit in enumerate(expected_visit_order)})
-            elif isinstance(expected_visit_order, str) and expected_visit_order != 'infer':
-                _show_warning("Supported options for expected_visit_order are list of visits, None, and infer. "
+                    {visit: i for i, visit in enumerate(self.expected_ordered_visits)})
+            else:
+                _show_warning("Supported options for expected_ordered_visits are list of visits, None, and infer. "
                               "The expected visit order is inferred to check if the dates are in the correct order.")
             sorted_visit_data = self.data.sort_values(by=['id', 'visit'], ignore_index=True)
             sorted_visit_data['ascending'] = sorted_visit_data.groupby(['id'])['date'].diff().map(
@@ -1123,17 +1134,30 @@ class AbstinenceCalculator:
             lapse_id, lapse_date, lapse_amount = lapse.id, lapse.date, lapse.amount
             lapses.append((lapse_id, lapse_date, lapse_amount, abst_name))
 
+    def calculate_abstinence_rates(self, dfs):
+        """
+        Calculate Abstinence Rates
+        :param dfs: One or more DataFrame objects
+        :return: DataFrame of abstinence rates
+        """
+        dfs = AbstinenceCalculator._listize_args(dfs)
+        abst_df = pd.concat(dfs, axis=1)
+        df = (abst_df.sum() / len(self.subject_ids)).to_frame().to_frame(name="Abstinence Rate")
+        df.index.name = "Abstinence Name"
+        return df
+
     @staticmethod
     def merge_abst_data_to_file(dfs, filepath):
         """
         Merge abstinence data and write the merged DataFrame to a file
 
-        :param dfs: Union[list, tuple], the list of abstinence data results (DataFrame)
+        :param dfs: Union[list, tuple], the list of abstinence data results (DataFrame), it's also OK to have just one
 
         :param filepath: Union[str, path], the output file name with a proper extension
 
         :return: None
         """
+        dfs = AbstinenceCalculator._listize_args(dfs)
         pd.concat(dfs, axis=1).to_csv(filepath)
 
     @staticmethod
@@ -1141,28 +1165,19 @@ class AbstinenceCalculator:
         """
         Merge lapses data and write the merged DataFrame to a file
 
-        :param dfs: Union[list, tuple], the list of lapse data results (DataFrame)
+        :param dfs: Union[list, tuple], the list of lapse data results (DataFrame), it's also OK to have just one
 
         :param filepath: Union[str, path], the output file name with a proper extension
 
         :return: None
         """
+        dfs = AbstinenceCalculator._listize_args(dfs)
         pd.concat(dfs, axis=0).to_csv(filepath, index=False)
 
 
 # %%
 beam_sas_abst = pd.read_sas("beam_abst_wide_v2mac.sas7bdat")
 beam_sas_abst = beam_sas_abst.rename(columns={'subjectid': 'id'}).set_index('id')
-
-# beam_co = pd.read_sas("scored_co.sas7bdat")
-# beam_co.rename(columns={
-#     "SubjectID": 'id',
-#     'CO': 'amount',
-#     'EventNo': 'visit'}, inplace=True)
-# beam_co = beam_co.merge(visit_data.data, on=['id', 'visit'])
-# beam_co.drop(['visit'], axis=1, inplace=True)
-# beam_co.to_csv("beam_co.csv", index=False)
-
 
 # %%
 included_subjects = pd.read_csv("beam_subjects.csv", usecols=['SubjectID']).iloc[:, 0].to_list()
@@ -1182,7 +1197,7 @@ tlfb_data.check_duplicates()
 tlfb_data.recode_data()
 tlfb_data.impute_data(biochemical_data=biochemical_data)
 
-visit_data = VisitData("beam_visit.csv", included_visits=list(range(11)), included_subjects=included_subjects)
+visit_data = VisitData("beam_visit.csv", expected_ordered_visits=sorted(range(11)), included_subjects=included_subjects)
 visit_data.profile_data()
 visit_data.get_out_of_order_visit_data()
 visit_data.drop_na_records()
@@ -1221,3 +1236,7 @@ print(comparison['prol_v9_same'].value_counts())
 print(comparison['prol_v10_same'].value_counts())
 
 abst_prolonged_mixed, lapses_mixed = abst_cal.abstinence_prolonged(4, [9], '5 cigs/7 days')
+
+visit_data.get_retention_rates()
+df = abst_cal.calculate_abstinence_rates([abst_pp, abst_pros, abst_prol]).to_frame(name="Abstinence Rate")
+df.index.name = "Abstinence Name"

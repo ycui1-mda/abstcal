@@ -343,6 +343,71 @@ id | date | amount | abst_name
 abst_cal.merge_lapse_data_to_file([lapse_df0, lapse_df1, lapse_df2], "merged_lapse_data.csv")
 ```
 
+## Additional Features
+### Integration of Biochemical Verification Data
+If your study has collected biochemical verification data, such as carbon monoxide for smoking or breath alcohol 
+concentration for alcohol intervention, these biochemical data can be integrated into the TLFB data. In this way,
+non-honest reporting can be identified (e.g., self-reported of no use, but biochemically un-verified), the 
+self-reported value will be overridden, and the updated record will be used in later abstinence calculation.
+
+The following code shows you a simplified work flow. Please note that the biochemical measures dataset
+should have the same data structure as you TLFB dataset. In other words, it should have three columns: __*id*__, 
+__*date*__, and __*amount*__.
+
+#### Prepare the Biochemical Dataset
+```
+# First read the biochemical verification data
+biochemical_data = TLFBData("beam_co.csv", included_subjects=included_subjects, abst_cutoff=4)
+biochemical_data.profile_data()
+
+# Interpolate biochemical records based on the half-life
+biochemical_data.interpolate_biochemical_data(0.5, 1)
+
+# Other data cleaning steps
+biochemical_data.drop_na_records()
+biochemical_data.check_duplicates()
+```
+
+#### Integrate the Biochemical Dataset with the TLFB data
+The following code shows you how the integration can be performed. Everything else stays the same, except that in the
+`impute_data` method, you need to specify the `biochemical_data` argument.
+```
+tlfb_data = TLFBData("beam_tlfb.csv", included_subjects=included_subjects)
+tlfb_sample_summary, tlfb_subject_summary = tlfb_data.profile_data()
+tlfb_data.drop_na_records()
+tlfb_data.check_duplicates()
+tlfb_data.recode_data()
+tlfb_data.impute_data(biochemical_data=biochemical_data)
+```
+
+### Calculate Retention Rate
+You can also calculate the retention rate with the visit data with a simple function call, as shown below.
+```
+visit_data.get_retention_rates()
+```
+
+### Calculate Abstinence Rates
+You can calculate the computed abstinence by providing the list of pandas DataFrame objects.
+```
+# Calculate abstinence by various definitions
+abst_pp, lapses_pp = abst_cal.abstinence_pp([9, 10], 7, including_end=True)
+abst_pros, lapses_pros = abst_cal.abstinence_prolonged(4, [9, 10], '5 cigs')
+abst_prol, lapses_prol = abst_cal.abstinence_prolonged(4, [9, 10], False)
+
+# Calculate abstinence rates for each
+abst_cal.calculate_abstinence_rates([abst_pp, abst_pros, abst_prol])
+```
+It will create the following DataFrame as the output.
+
+Abstinence Name | Abstinence Rate
+------------ | -------------
+itt_pp7_v9                  | 0.159091
+itt_pp7_v10                 | 0.170455
+itt_prolonged_5_cigs_v9     | 0.159091
+itt_prolonged_5_cigs_v10    | 0.113636
+itt_prolonged_False_v9      | 0.102273
+itt_prolonged_False_v10     | 0.068182
+
 ## Questions or Comments
 If you have any questions about this package, please feel free to leave comments here or
 send me an email to ycui1@mdanderson.org.
