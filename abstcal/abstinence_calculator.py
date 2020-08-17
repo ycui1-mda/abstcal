@@ -138,6 +138,34 @@ class CalculatorData:
         return df
 
     @staticmethod
+    def write_data_to_path(df, filepath, index=False):
+        """
+        Write data to the specified path
+
+        :param df: DataFrame
+        :param filepath: Union[str, Path, None], the path to the file to be read
+            Supported file types: comma-separated, tab-separated, and Excel spreadsheet, if None, no writing will be
+            performed
+
+        :param index: bool, whether the index of the DataFrame will be written to the output file
+
+        :return: a DataFrame
+        """
+        if filepath is None:
+            return
+
+        path = Path(filepath)
+        file_extension = path.suffix.lower()
+        if file_extension == ".csv":
+            pd.DataFrame.to_csv(df, path, index=index)
+        elif file_extension in (".xls", ".xlsx", ".xlsm", ".xlsb"):
+            pd.DataFrame.to_excel(df, path, index=index)
+        elif file_extension == ".txt":
+            pd.DataFrame.to_csv(df, path, sep='\t', index=index)
+        else:
+            raise FileExtensionError(filepath)
+
+    @staticmethod
     def _validate_columns(df, needed_cols_ordered, data_name, col_names):
         needed_cols_unordered = set(needed_cols_ordered)
         current_cols_unordered = set(df.columns)
@@ -618,7 +646,7 @@ class VisitData(CalculatorData):
         )
         return pd.Series(visit_summary)
 
-    def get_retention_rates(self):
+    def get_retention_rates(self, filepath=None):
         _data = self.data
         if "imputation_code" in _data.columns:
             _data = self.data[self.data['imputation_code'] == 0]
@@ -644,6 +672,7 @@ class VisitData(CalculatorData):
         retention_df['attrition_rate'] = retention_df['subject_count'].map(
             lambda x: f"{(subject_count - x) / subject_count:.2%}"
         )
+        CalculatorData.write_data_to_path(retention_df, filepath, True)
         return retention_df
 
     def _get_visit_subject_summary(self, min_date_cutoff=None, max_date_cutoff=None):
@@ -1134,16 +1163,21 @@ class AbstinenceCalculator:
             lapse_id, lapse_date, lapse_amount = lapse.id, lapse.date, lapse.amount
             lapses.append((lapse_id, lapse_date, lapse_amount, abst_name))
 
-    def calculate_abstinence_rates(self, dfs):
+    def calculate_abstinence_rates(self, dfs, filepath=None):
         """
         Calculate Abstinence Rates
-        :param dfs: One or more DataFrame objects
-        :return: DataFrame of abstinence rates
+
+        :param dfs: One or more DataFrame objects, which are abstinence data generated from the calculations
+
+        :param filepath: Union[str, Path, None], the path to the output file if set, the default is None, no output
+
+        :return: DataFrame containing the abstinence rates
         """
         dfs = AbstinenceCalculator._listize_args(dfs)
         abst_df = pd.concat(dfs, axis=1)
-        df = (abst_df.sum() / len(self.subject_ids)).to_frame().to_frame(name="Abstinence Rate")
+        df = (abst_df.sum() / len(self.subject_ids)).to_frame(name="Abstinence Rate")
         df.index.name = "Abstinence Name"
+        CalculatorData.write_data_to_path(df, filepath, True)
         return df
 
     @staticmethod
@@ -1153,12 +1187,12 @@ class AbstinenceCalculator:
 
         :param dfs: Union[list, tuple], the list of abstinence data results (DataFrame), it's also OK to have just one
 
-        :param filepath: Union[str, path], the output file name with a proper extension
+        :param filepath: Union[str, Path], the output file name with a proper extension
 
         :return: None
         """
         dfs = AbstinenceCalculator._listize_args(dfs)
-        pd.concat(dfs, axis=1).to_csv(filepath)
+        CalculatorData.write_data_to_path(pd.concat(dfs, axis=1), filepath, True)
 
     @staticmethod
     def merge_lapse_data_to_file(dfs, filepath):
@@ -1172,7 +1206,7 @@ class AbstinenceCalculator:
         :return: None
         """
         dfs = AbstinenceCalculator._listize_args(dfs)
-        pd.concat(dfs, axis=0).to_csv(filepath, index=False)
+        CalculatorData.write_data_to_path(pd.concat(dfs, axis=0), filepath)
 
 
 # %%

@@ -1,23 +1,27 @@
 # Abstinence Calculator
 
-A Python package to calculate abstinence results using the timeline follow back interview data
+A Python package to calculate abstinence results using the timeline followback interview data
 
 ## Installation
-Install the package using the pip tool
+Install the package using the pip tool. If you need instruction on how to install Python, you 
+can find information at the [Python](https://www.python.org/) website. To install the pip tool,
+which is the most common Python package management tool, you can find information at the 
+[pypa](https://pip.pypa.io/en/stable/installing/) website.
 
 ```
 pip install abstcal
 ```
 
 ## Overview of the Package
-This package is developed to score abstinence using the Timeline Follow Back (TLFB) and 
+This package is developed to score abstinence using the Timeline Followback (TLFB) and 
 visit data in clinical substance use research. It provides functionalities to preprocess 
 the datasets to remove duplicates and outliers. In addition, it can impute missing data 
 using various criteria. It supports the calculation of abstinence of varied definitions, 
-including continuous, point-prevalence, and prolonged.
+including continuous, point-prevalence, and prolonged. It can optionally integrate biochemical
+verification data.
 
 ## Required Datasets
-**The Timeline Follow Back Data.** The dataset should have three columns: __*id*__, 
+**The Timeline Followback Data (Required)** The dataset should have three columns: __*id*__, 
 __*date*__, and __*amount*__. The id column stores the subject ids, each of which should 
 uniquely identify a study subject. The date column stores the dates when daily substance 
 uses are collected. The amount column stores substance uses for each day.
@@ -31,7 +35,21 @@ id | date | amount
 1000 | 02/07/2019 | 10
 1000 | 02/08/2019 | 8
 
-**The Visit Data.** It needs to be in one of the following two formats.
+**The Biochemical Measures Dataset (Optional)** The dataset should have three columns: __*id*__, 
+__*date*__, and __*amount*__. The id column stores the subject ids, each of which should 
+uniquely identify a study subject. The date column stores the dates when daily substance 
+uses are collected. The amount column stores the biochemical measures that verify substance use status.
+
+id | date | amount 
+------------ | ------------- | -------------
+1000 | 02/03/2019 | 4
+1000 | 02/11/2019 | 6
+1000 | 03/04/2019 | 10
+1000 | 03/22/2019 | 8
+1000 | 03/28/2019 | 6
+1000 | 04/15/2019 | 5
+
+**The Visit Data (Required)** It needs to be in one of the following two formats.
 1. **The long format.** The dataset should have three columns: __*id*__, __*visit*__, 
 and __*date*__. The id column stores the subject ids, each of which should uniquely 
 identify a study subject. The visit column stores the visits. The date column stores 
@@ -44,7 +62,8 @@ id | visit | date
 1000 | 2 | 02/17/2019
 1000 | 3 | 03/09/2019 
 1000 | 4 | 04/07/2019 
-1000 | 5 | 05/06/2019 
+1000 | 5 | 05/06/2019
+
 2. **The wide format.** The dataset should have the id column and additional columns 
 with each representing a visit.
 
@@ -317,6 +336,7 @@ abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], ('5 cigs', '3 days/
 #### 5a. The abstinence datasets
 To output the abstinence datasets that you have created from calling the abstinence calculation
 methods, you can use the following method to create a combined dataset, something like below.
+
 id | itt_abst_cont_v5_v2 | itt_abst_cont_v6_v2 | itt_abst_pp7_v5 | itt_abst_pp7_v6
 ------------ | ------------- | ------------- | ------------ | -------------
 1000 | 1 | 1 | 1 | 1
@@ -331,6 +351,7 @@ abst_cal.merge_abst_data_to_file([abst_df0, abst_df1, abst_df2], "merged_abstine
 #### 5b. The lapse datasets
 To output the lapse datasets that you have created from calling the abstinence calculation
 methods, you can use the following method to create a combined dataset, something like below.
+
 id | date | amount | abst_name
 ------------ | ------------- | ------------- | -------------
 1000 | 02/03/2019 | 10 | itt_abst_cont_v5
@@ -344,17 +365,19 @@ abst_cal.merge_lapse_data_to_file([lapse_df0, lapse_df1, lapse_df2], "merged_lap
 ```
 
 ## Additional Features
-### Integration of Biochemical Verification Data
+### I. Integration of Biochemical Verification Data
 If your study has collected biochemical verification data, such as carbon monoxide for smoking or breath alcohol 
 concentration for alcohol intervention, these biochemical data can be integrated into the TLFB data. In this way,
 non-honest reporting can be identified (e.g., self-reported of no use, but biochemically un-verified), the 
 self-reported value will be overridden, and the updated record will be used in later abstinence calculation.
 
-The following code shows you a simplified work flow. Please note that the biochemical measures dataset
-should have the same data structure as you TLFB dataset. In other words, it should have three columns: __*id*__, 
-__*date*__, and __*amount*__.
+The following code shows you a possible work flow. Please note that the biochemical measures dataset should have the 
+same data structure as you TLFB dataset. In other words, it should have three columns: __*id*__, __*date*__, and 
+__*amount*__.
 
-#### Prepare the Biochemical Dataset
+#### Ia. Prepare the Biochemical Dataset
+A key operation to prepare the biochemical dataset is to interpolate extra meaningful records based on the exiting 
+records using the `interpolate_biochemical_data` function, as shown below.
 ```
 # First read the biochemical verification data
 biochemical_data = TLFBData("beam_co.csv", included_subjects=included_subjects, abst_cutoff=4)
@@ -368,9 +391,9 @@ biochemical_data.drop_na_records()
 biochemical_data.check_duplicates()
 ```
 
-#### Integrate the Biochemical Dataset with the TLFB data
+#### Ib. Integrate the Biochemical Dataset with the TLFB data
 The following code shows you how the integration can be performed. Everything else stays the same, except that in the
-`impute_data` method, you need to specify the `biochemical_data` argument.
+`impute_data` method, you need to **specify the `biochemical_data` argument**.
 ```
 tlfb_data = TLFBData("beam_tlfb.csv", included_subjects=included_subjects)
 tlfb_sample_summary, tlfb_subject_summary = tlfb_data.profile_data()
@@ -380,13 +403,18 @@ tlfb_data.recode_data()
 tlfb_data.impute_data(biochemical_data=biochemical_data)
 ```
 
-### Calculate Retention Rate
-You can also calculate the retention rate with the visit data with a simple function call, as shown below.
+### II. Calculate Retention Rates
+You can also calculate the retention rate with the visit data with a simple function call, as shown below. 
+If a filepath is specified, it will write to a file.
 ```
+# Just show the retention rates results
 visit_data.get_retention_rates()
+
+# Write the retention rates to an external file
+visit_data.get_retention_rates('retention_rates.csv')
 ```
 
-### Calculate Abstinence Rates
+### III. Calculate Abstinence Rates
 You can calculate the computed abstinence by providing the list of pandas DataFrame objects.
 ```
 # Calculate abstinence by various definitions
@@ -396,8 +424,9 @@ abst_prol, lapses_prol = abst_cal.abstinence_prolonged(4, [9, 10], False)
 
 # Calculate abstinence rates for each
 abst_cal.calculate_abstinence_rates([abst_pp, abst_pros, abst_prol])
+abst_cal.calculate_abstinence_rates([abst_pp, abst_pros, abst_prol], 'abstinence_results.csv')
 ```
-It will create the following DataFrame as the output.
+It will create the following DataFrame as the output. If a filepath is specified, it will write to a file.
 
 Abstinence Name | Abstinence Rate
 ------------ | -------------
