@@ -344,25 +344,24 @@ class TLFBData(CalculatorData):
 
         :param floor_amount: Union[None, int, float], default None
             Recode values lower than the floor amount to the floor amount.
-            When None, no replacement will be performed
+            When None, it's replaced with missing data
 
         :param ceil_amount: Union[None, int, float], default None
             Recode values higher than the ceil amount to the ceil amount.
-            When None, no replacement will be performed
+            When None, it's replaced with missing data
 
         :return: Summary of the recoding
         """
         recode_summary = dict()
-        if floor_amount is not None:
-            outlier_count = pd.Series(self.data['amount'] < floor_amount).sum()
-            recode_summary[f'Number of outliers (< {floor_amount})'] = outlier_count
-            self.data['amount'] = self.data['amount'].map(lambda x: max(x, floor_amount))
-        if ceil_amount is not None:
-            outlier_count = pd.Series(self.data['amount'] > ceil_amount).sum()
-            recode_summary[f'Number of outliers (> {ceil_amount})'] = outlier_count
-            self.data['amount'] = self.data['amount'].map(lambda x: min(x, ceil_amount))
-        if recode_summary:
-            return recode_summary
+        outlier_count_low = pd.Series(self.data['amount'] < floor_amount).sum()
+        recode_summary[f'Number of outliers (< {floor_amount})'] = outlier_count_low
+        self.data['amount'] = \
+            np.nan if floor_amount is None else self.data['amount'].map(lambda x: max(x, floor_amount))
+        outlier_count_high = pd.Series(self.data['amount'] > ceil_amount).sum()
+        recode_summary[f'Number of outliers (> {ceil_amount})'] = outlier_count_high
+        self.data['amount'] = \
+            np.nan if ceil_amount is None else self.data['amount'].map(lambda x: min(x, ceil_amount))
+        return recode_summary
 
     def impute_data(self, impute="linear", last_record_action="ffill", maximum_allowed_gap_days=None,
                     biochemical_data=None, overridden_amount="infer"):
