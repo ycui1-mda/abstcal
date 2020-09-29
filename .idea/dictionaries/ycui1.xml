@@ -2,10 +2,12 @@
   <dictionary name="ycui1">
     <words>
       <w>abst</w>
+      <w>abstcal</w>
       <w>followback</w>
       <w>listize</w>
       <w>nonab</w>
       <w>nunique</w>
+      <w>prol</w>
       <w>tlfb</w>
     </words>
   </dictionary>

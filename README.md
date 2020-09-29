@@ -4,9 +4,12 @@ A Python package to calculate abstinence results using the timeline followback i
 
 ## Installation
 Install the package using the pip tool. If you need instruction on how to install Python, you 
-can find information at the [Python](https://www.python.org/) website. To install the pip tool,
-which is the most common Python package management tool, you can find information at the 
+can find information at the [Python](https://www.python.org/) website. The pip tool is the most 
+common Python package management tool, and you can find information about its use instruction at the 
 [pypa](https://pip.pypa.io/en/stable/installing/) website.
+
+If you're not familiar with Python coding, you can run the Jupyter Notebook included on this page on
+Google Colab, which is an online platform to run your Python code remotely on a server.
 
 ```
 pip install abstcal

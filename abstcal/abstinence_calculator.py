@@ -743,27 +743,27 @@ class VisitData(CalculatorData):
         """
         Recode the abnormal data of the TLFB dataset
 
-        :param floor_date: Union[None, int, float], default None
-            Recode values lower than the floor amount to the floor amount.
-            When None, no replacement will be performed
+        :param floor_date: Union[None, date], default None
+            Recode values lower than the floor date to the floor date.
+            When None, the outlier will be recoded as missing
 
-        :param ceil_date: Union[None, int, float], default None
-            Recode values higher than the ceil amount to the ceil amount.
-            When None, no replacement will be performed
+        :param ceil_date: Union[None, date], default None
+            Recode values higher than the ceil date to the ceil date.
+            When None, the outlier will be recoded as missing
 
         :return: summary of the recoding
         """
         recode_summary = dict()
-        if floor_date is not None:
-            casted_floor_date = pd.to_datetime(floor_date, infer_datetime_format=True)
-            outlier_count = pd.Series(self.data['date'] < casted_floor_date).sum()
-            recode_summary[f"Number of outliers (< {casted_floor_date.strftime('%m/%d/%Y')})"] = outlier_count
-            self.data['date'] = self.data['date'].map(lambda x: max(x, casted_floor_date))
-        if ceil_date is not None:
-            casted_ceil_date = pd.to_datetime(ceil_date, infer_datetime_format=True)
-            outlier_count = pd.Series(self.data['date'] > casted_ceil_date).sum()
-            recode_summary[f"Number of outliers (> {casted_ceil_date.strftime('%m/%d/%Y')})"] = outlier_count
-            self.data['date'] = self.data['date'].map(lambda x: min(x, casted_ceil_date))
+        casted_floor_date = pd.to_datetime(floor_date, infer_datetime_format=True)
+        outlier_count_low = pd.Series(self.data['date'] < casted_floor_date).sum()
+        recode_summary[f"Number of outliers (< {casted_floor_date.strftime('%m/%d/%Y')})"] = outlier_count_low
+        self.data['date'] = \
+            np.nan if floor_date is None else self.data['date'].map(lambda x: max(x, casted_floor_date))
+        casted_ceil_date = pd.to_datetime(ceil_date, infer_datetime_format=True)
+        outlier_count_high = pd.Series(self.data['date'] > casted_ceil_date).sum()
+        recode_summary[f"Number of outliers (> {casted_ceil_date.strftime('%m/%d/%Y')})"] = outlier_count_high
+        self.data['date'] = \
+            np.nan if ceil_date is None else self.data['date'].map(lambda x: min(x, casted_ceil_date))
         return recode_summary
 
     # noinspection PyTypeChecker
@@ -1230,84 +1230,3 @@ class AbstinenceCalculator:
         merged_df = pd.concat(dfs, axis=0)
         CalculatorData.write_data_to_path(merged_df, filepath)
         return merged_df
-
-
-# %%
-import pandas as pd
-
-visit_data = VisitData("test_visit.csv")
-visit_data.profile_data()
-visit_data.get_retention_rates()
-visit_data.get_out_of_order_visit_data()
-visit_data.drop_na_records()
-visit_data.impute_data()
-
-co_data = TLFBData("test_co.csv", abst_cutoff=4)
-co_data.profile_data()
-co_data.interpolate_biochemical_data(0.25, 1)
-co_data.profile_data()
-co_data.drop_na_records()
-co_data.check_duplicates()
-
-tlfb_data = TLFBData("test_tlfb.csv")
-tlfb_data.profile_data()
-tlfb_data.drop_na_records()
-tlfb_data.check_duplicates()
-tlfb_data.recode_data()
-tlfb_data.impute_data(biochemical_data=co_data)
-
-calculator = AbstinenceCalculator(tlfb_data, visit_data)
-
-
-def calculate_abstinence(criterion):
-    abst_pp7, lapses_pp7 = calculator.abstinence_pp([3, 4], 7, mode=criterion)
-    abst_prol, lapses_prol = calculator.abstinence_prolonged(1, [3, 4], False, mode=criterion)
-    abst_pros, lapses_pros = calculator.abstinence_prolonged(1, [3, 4], "5 cigs", mode=criterion)
-    abst_cont, lapses_cont = calculator.abstinence_cont(1, [3, 4], mode=criterion)
-
-    abst_python = calculator.merge_abst_data([abst_pp7, abst_prol, abst_pros, abst_cont])
-    lapses = calculator.merge_lapse_data([lapses_pp7, lapses_prol, lapses_pros, lapses_cont])
-
-    return abst_python, lapses
-
-
-abst_itt, lapses_itt = calculate_abstinence("itt")
-abst_ro, lapses_ro = calculate_abstinence("ro")
-
-calculator.calculate_abstinence_rates(abst_itt)
-calculator.calculate_abstinence_rates(abst_ro)
-
-# %%
-abst_sas = pd.read_csv("abst_sas.csv", index_col='id')
-abst_comp = pd.concat([abst_itt, abst_sas], axis=1)
-abst_comp['eot_pp7_comp'] = abst_comp['abst_EOT_7dpp'] == abst_comp['itt_pp7_v3']
-abst_comp['eot_prol_comp'] = abst_comp['abst_EOT_prol'] == abst_comp['itt_prolonged_False_v3']
-abst_comp['eot_pros_comp'] = abst_comp['abst_EOT_pros'] == abst_comp['itt_prolonged_5_cigs_v3']
-abst_comp['m3_pp7_comp'] = abst_comp['abst_M3_7dpp'] == abst_comp['itt_pp7_v4']
-abst_comp['m3_prol_comp'] = abst_comp['abst_M3_prol'] == abst_comp['itt_prolonged_False_v4']
-abst_comp['m3_pros_comp'] = abst_comp['abst_M3_pros'] == abst_comp['itt_prolonged_5_cigs_v4']
-
-comparison_cols = 'eot_pp7_comp eot_prol_comp eot_pros_comp m3_pp7_comp m3_prol_comp m3_pros_comp'.split()
-for col in comparison_cols:
-    print(f'{col}: {abst_comp[col].value_counts()})')
-    print(abst_comp.loc[abst_comp[col] == False])
-
-"""
-EOT Point prevalence 7 days
-1039: different dates were used
-EOT Prolonged
-1024: check the SAS algorithm & data
-EOT Prolonged Slip
-1024: check the SAS algorithm & data
-1043: check the SAS algorithm & data
-#####
-M3 Point prevalence 7 days
-1040: check the SAS algorithm & data
-M3 Prolonged
-1024
-1040
-M3 Prolonged Slip
-1024: 
-1038: 4 cigarettes
-1040: check the SAS algorithm & data
-"""
