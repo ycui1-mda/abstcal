@@ -338,31 +338,37 @@ class TLFBData(CalculatorData):
         self.data = pd.concat([self.data, interpolated_df]).sort_values(by=self._index_keys, ignore_index=True)
         return len(interpolated_df)
 
-    def recode_data(self, floor_amount=None, ceil_amount=None):
+    def recode_outliers(self, floor_amount, ceil_amount, drop_outliers=True):
         """
         Recode the abnormal data of the TLFB dataset
 
-        :param floor_amount: Union[None, int, float], default None
-            Recode values lower than the floor amount to the floor amount.
-            When None, it's replaced with missing data
+        :param floor_amount: Union[int, float]
+            Drop records when their values are lower than the floor amount if drop_outliers is True (the default),
+            otherwise outliers will be replaced with the floor amount (i.e., drop_outliers=False)
 
-        :param ceil_amount: Union[None, int, float], default None
-            Recode values higher than the ceil amount to the ceil amount.
-            When None, it's replaced with missing data
+
+        :param ceil_amount: Union[int, float]
+            Drop records when their values are higher than the ceil amount if drop_outliers is True (the default),
+            otherwise outliers will be replaced with the ceil amount (i.e., drop_outliers=False)
+
+
+        :param drop_outliers: bool, default is True
+            Drop outliers when it's True and recode outliers to bounding values when it's False
 
         :return: Summary of the recoding
         """
         recode_summary = dict()
         outlier_count_low = pd.Series(self.data['amount'] < floor_amount).sum()
         recode_summary[f'Number of outliers (< {floor_amount})'] = outlier_count_low
-        self.data['amount'] = \
-            np.nan if floor_amount is None else self.data['amount'].map(lambda x: max(x, floor_amount))
+        self.data['amount'] = np.nan if drop_outliers else self.data['amount'].map(lambda x: max(x, floor_amount))
         outlier_count_high = pd.Series(self.data['amount'] > ceil_amount).sum()
         recode_summary[f'Number of outliers (> {ceil_amount})'] = outlier_count_high
-        self.data['amount'] = \
-            np.nan if ceil_amount is None else self.data['amount'].map(lambda x: min(x, ceil_amount))
+        self.data['amount'] = np.nan if drop_outliers else self.data['amount'].map(lambda x: min(x, ceil_amount))
+        if drop_outliers:
+            self.drop_na_records()
         return recode_summary
 
+    # noinspection PyTypeChecker
     def impute_data(self, impute="linear", last_record_action="ffill", maximum_allowed_gap_days=None,
                     biochemical_data=None, overridden_amount="infer"):
         """
@@ -448,10 +454,10 @@ class TLFBData(CalculatorData):
             lambda x: x.days if pd.notnull(x) else 1)
         missing_data = self.data[self.data['diff_days'] > 1.0]
         imputed_records = []
-        for row in missing_data.itertuples():
-            start_data = self.data.iloc[row.Index - 1]
+        for data_row in missing_data.itertuples():
+            start_data = self.data.iloc[data_row.Index - 1]
             start_record = TLFBRecord(start_data.id, start_data.date, start_data.amount, start_data.imputation_code)
-            end_record = TLFBRecord(row.id, row.date, row.amount, start_data.imputation_code)
+            end_record = TLFBRecord(data_row.id, data_row.date, data_row.amount, start_data.imputation_code)
             imputed_records.extend(
                 self._impute_missing_block(start_record, end_record, impute, maximum_allowed_gap_days))
         self.data.drop(['diff_days'], axis=1, inplace=True)
@@ -664,8 +670,6 @@ class VisitData(CalculatorData):
         if "imputation_code" in _data.columns:
             _data = self.data[self.data['imputation_code'] == 0]
 
-        attedance_counts = _data['visit'].value_counts()
-
         last_attended_counts = _data.loc[_data.groupby('id')['date'].idxmax(), "visit"].value_counts().to_dict()
 
         sorted_visits = self.expected_ordered_visits or sorted(self.visits)
@@ -688,7 +692,7 @@ class VisitData(CalculatorData):
             lambda x: f"{(subject_count - x) / subject_count:.2%}"
         )
 
-        retention_df['attendance_rate'] = visit_data.data['visit'].value_counts().map(
+        retention_df['attendance_rate'] = self.data['visit'].value_counts().map(
             lambda x: f"{x / subject_count:.2%}"
         )
         CalculatorData.write_data_to_path(retention_df, filepath, True)
@@ -734,22 +738,25 @@ class VisitData(CalculatorData):
             )
             visits_out_of_order = sorted_visit_data.groupby(['id'])['ascending'].all().map(lambda x: not x)
             if visits_out_of_order.sum() > 0:
-                _show_warning(f"Please note that some subjects (n={visits_out_of_order.sum()}) appear to have their "
-                             f"visit dates out of the correct order. You can find out who they are in the visit data "
-                             f"summary by subject. Please fix them if applicable.")
+                _show_warning(f"Please note that some subjects (n={visits_out_of_order.sum()}) appear to have their \
+                visit dates out of the correct order. You can find out who they are in the visit data summary by \
+                subject. Please fix them if applicable.")
             return visits_out_of_order
 
-    def recode_data(self, floor_date=None, ceil_date=None):
+    def recode_outliers(self, floor_date, ceil_date, drop_outliers=True):
         """
-        Recode the abnormal data of the TLFB dataset
+        Recode the abnormal data of the visit dataset
 
-        :param floor_date: Union[None, date], default None
-            Recode values lower than the floor date to the floor date.
-            When None, the outlier will be recoded as missing
+        :param floor_date: date (or date-like strings: "07/15/2020")
+            Drop records when their values are lower than the floor date if drop_outliers is True (the default),
+            otherwise outliers will be replaced with the floor date (i.e., drop_outliers=False)
 
-        :param ceil_date: Union[None, date], default None
-            Recode values higher than the ceil date to the ceil date.
-            When None, the outlier will be recoded as missing
+        :param ceil_date: date (or date-like strings: "07/15/2020")
+            Drop records when their values are higher than the ceil date if drop_outliers is True (the default),
+            otherwise outliers will be replaced with the ceil date (i.e., drop_outliers=False)
+
+        :param drop_outliers: bool, default is True
+            Drop outliers when it's True and recode outliers to bounding dates when it's False
 
         :return: summary of the recoding
         """
@@ -757,13 +764,13 @@ class VisitData(CalculatorData):
         casted_floor_date = pd.to_datetime(floor_date, infer_datetime_format=True)
         outlier_count_low = pd.Series(self.data['date'] < casted_floor_date).sum()
         recode_summary[f"Number of outliers (< {casted_floor_date.strftime('%m/%d/%Y')})"] = outlier_count_low
-        self.data['date'] = \
-            np.nan if floor_date is None else self.data['date'].map(lambda x: max(x, casted_floor_date))
+        self.data['date'] = np.nan if drop_outliers else self.data['date'].map(lambda x: max(x, casted_floor_date))
         casted_ceil_date = pd.to_datetime(ceil_date, infer_datetime_format=True)
         outlier_count_high = pd.Series(self.data['date'] > casted_ceil_date).sum()
         recode_summary[f"Number of outliers (> {casted_ceil_date.strftime('%m/%d/%Y')})"] = outlier_count_high
-        self.data['date'] = \
-            np.nan if ceil_date is None else self.data['date'].map(lambda x: min(x, casted_ceil_date))
+        self.data['date'] = np.nan if drop_outliers else self.data['date'].map(lambda x: min(x, casted_ceil_date))
+        if drop_outliers:
+            self.drop_na_records()
         return recode_summary
 
     # noinspection PyTypeChecker
@@ -1141,8 +1148,8 @@ class AbstinenceCalculator:
     def _validate_dates(subject_id, start_date, end_date):
         validated = False
         if start_date >= end_date:
-            _show_warning(f"The end date of the time window for the subject {subject_id} {end_date} isn't later "
-                         f"than the start date {start_date}. Please verify that the visit dates are correct.")
+            _show_warning(f"The end date of the time window for the subject {subject_id} {end_date} isn't later \
+            than the start date {start_date}. Please verify that the visit dates are correct.")
         elif pd.NaT in (start_date, end_date):
             _show_warning(f"Subject {subject_id} is missing some of the date information.")
         else:
@@ -1176,7 +1183,8 @@ class AbstinenceCalculator:
             lapse_id, lapse_date, lapse_amount = lapse.id, lapse.date, lapse.amount
             lapses.append((lapse_id, lapse_date, lapse_amount, abst_name))
 
-    def calculate_abstinence_rates(self, dfs, filepath=None):
+    @staticmethod
+    def calculate_abstinence_rates(dfs, filepath=None):
         """
         Calculate Abstinence Rates
 
