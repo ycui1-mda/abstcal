@@ -15,7 +15,7 @@ to run your Python code remotely on a server.
 ```
 pip install abstcal
 ```
-
+*********
 ## Overview of the Package
 This package is developed to score abstinence using the Timeline Followback (TLFB) and 
 visit data in clinical substance use research. It provides functionalities to preprocess 
@@ -25,9 +25,10 @@ using various criteria.
 It supports the calculation of abstinence of varied definitions, 
 including continuous, point-prevalence, and prolonged using either intent-to-treat (ITT) 
 or responders-only assumption. It can optionally integrate biochemical verification data.
-
+*********
 ## Required Datasets
-**The Timeline Followback Data (Required)** The dataset should have three columns: __*id*__, 
+#### The Timeline Followback Data (Required)
+The dataset should have three columns: __*id*__, 
 __*date*__, and __*amount*__. The id column stores the subject ids, each of which should 
 uniquely identify a study subject. The date column stores the dates when daily substance 
 uses are collected. The amount column stores substance uses for each day.
@@ -40,8 +41,9 @@ id | date | amount
 1000 | 02/06/2019 | 9
 1000 | 02/07/2019 | 10
 1000 | 02/08/2019 | 8
-
-**The Biochemical Measures Dataset (Optional)** The dataset should have three columns: __*id*__, 
+***
+#### The Biochemical Measures Dataset (Optional)
+The dataset should have three columns: __*id*__, 
 __*date*__, and __*amount*__. The id column stores the subject ids, each of which should 
 uniquely identify a study subject. The date column stores the dates when daily substance 
 uses are collected. The amount column stores the biochemical measures that verify substance use status.
@@ -54,9 +56,10 @@ id | date | amount
 1000 | 03/22/2019 | 8
 1000 | 03/28/2019 | 6
 1000 | 04/15/2019 | 5
-
-**The Visit Data (Required)** It needs to be in one of the following two formats.
-1. **The long format.** The dataset should have three columns: __*id*__, __*visit*__, 
+***
+#### The Visit Data (Required)
+It needs to be in one of the following two formats.
+**The long format.** The dataset should have three columns: __*id*__, __*visit*__, 
 and __*date*__. The id column stores the subject ids, each of which should uniquely 
 identify a study subject. The visit column stores the visits. The date column stores 
 the dates for the visits.
@@ -70,14 +73,14 @@ id | visit | date
 1000 | 4 | 04/07/2019 
 1000 | 5 | 05/06/2019
 
-2. **The wide format.** The dataset should have the id column and additional columns 
+**The wide format.** The dataset should have the id column and additional columns 
 with each representing a visit.
 
 id | v0 | v1 | v2 | v3 | v4 | v5
 ----- | ----- | ----- | ----- | ----- | ----- | ----- |
 1000 | 02/03/2019 | 02/10/2019 | 02/17/2019 | 03/09/2019 | 04/07/2019 | 05/06/2019
 1001 | 02/05/2019 | 02/13/2019 | 02/20/2019 | 03/11/2019 | 04/06/2019 | 05/09/2019
-
+*********
 ## Supported Abstinence Definitions
 The following abstinence definitions have both calculated as the intent-to-treat (ITT) 
 or responders-only options. By default, the ITT option is used.
@@ -89,7 +92,7 @@ the assessment time point.
 2 weeks) until the assessment time point.
 4. **Prolonged Abstinence With Lapses**: Lapses are allowed after the grace period 
 until the assessment time point.
-
+*********
 ## Use Example
 
 ### 1. Import the Package
