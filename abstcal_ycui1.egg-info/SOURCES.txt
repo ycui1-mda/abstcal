@@ -3,6 +3,10 @@ setup.cfg
 setup.py
 abstcal/__init__.py
 abstcal/abstinence_calculator.py
+abstcal/calculator_data.py
+abstcal/calculator_error.py
+abstcal/tlfb_data.py
+abstcal/visit_data.py
 abstcal_ycui1.egg-info/PKG-INFO
 abstcal_ycui1.egg-info/SOURCES.txt
 abstcal_ycui1.egg-info/dependency_links.txt
