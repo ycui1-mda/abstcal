@@ -251,11 +251,13 @@ class VisitData(CalculatorData):
         casted_floor_date = pd.to_datetime(floor_date, infer_datetime_format=True)
         outlier_count_low = pd.Series(self.data['date'] < casted_floor_date).sum()
         recode_summary[f"Number of outliers (< {casted_floor_date.strftime('%m/%d/%Y')})"] = outlier_count_low
-        self.data['date'] = np.nan if drop_outliers else self.data['date'].map(lambda x: max(x, casted_floor_date))
+        self.data['date'] = self.data['date'].map(
+            lambda x: np.nan if drop_outliers and x < casted_floor_date else max(x, casted_floor_date))
         casted_ceil_date = pd.to_datetime(ceil_date, infer_datetime_format=True)
         outlier_count_high = pd.Series(self.data['date'] > casted_ceil_date).sum()
         recode_summary[f"Number of outliers (> {casted_ceil_date.strftime('%m/%d/%Y')})"] = outlier_count_high
-        self.data['date'] = np.nan if drop_outliers else self.data['date'].map(lambda x: min(x, casted_ceil_date))
+        self.data['date'] = self.data['date'].map(
+            lambda x: np.nan if drop_outliers and x > casted_ceil_date else min(x, casted_ceil_date))
         if drop_outliers:
             self.drop_na_records()
         return recode_summary

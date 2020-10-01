@@ -189,10 +189,12 @@ class TLFBData(CalculatorData):
         recode_summary = dict()
         outlier_count_low = pd.Series(self.data['amount'] < floor_amount).sum()
         recode_summary[f'Number of outliers (< {floor_amount})'] = outlier_count_low
-        self.data['amount'] = np.nan if drop_outliers else self.data['amount'].map(lambda x: max(x, floor_amount))
+        self.data['amount'] = self.data['amount'].map(
+            lambda x: np.nan if drop_outliers and x < floor_amount else max(x, floor_amount))
         outlier_count_high = pd.Series(self.data['amount'] > ceil_amount).sum()
         recode_summary[f'Number of outliers (> {ceil_amount})'] = outlier_count_high
-        self.data['amount'] = np.nan if drop_outliers else self.data['amount'].map(lambda x: min(x, ceil_amount))
+        self.data['amount'] = self.data['amount'].map(
+            lambda x: np.nan if drop_outliers and x > ceil_amount else min(x, ceil_amount))
         if drop_outliers:
             self.drop_na_records()
         return recode_summary
