@@ -7,7 +7,7 @@ abstcal/calculator_data.py
 abstcal/calculator_error.py
 abstcal/tlfb_data.py
 abstcal/visit_data.py
-abstcal_ycui1.egg-info/PKG-INFO
-abstcal_ycui1.egg-info/SOURCES.txt
-abstcal_ycui1.egg-info/dependency_links.txt
-abstcal_ycui1.egg-info/top_level.txt
+abstcal.egg-info/PKG-INFO
+abstcal.egg-info/SOURCES.txt
+abstcal.egg-info/dependency_links.txt
+abstcal.egg-info/top_level.txt
