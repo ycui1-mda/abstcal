@@ -96,7 +96,7 @@ until the assessment time point.
 ## Use Example
 
 ### 1. Import the Package
-```
+```python
 from abstcal import TLFBData, VisitData, AbstinenceCalculator
 ```
 
@@ -105,7 +105,7 @@ from abstcal import TLFBData, VisitData, AbstinenceCalculator
 You can either specify the full path of the TLFB data or just the filename if the dataset 
 is in your current work directory. Supported file formats include comma-separated (.csv), 
 tab-delimited (.txt), and Excel spreadsheets (.xls, .xlsx).
-```
+```python
 tlfb_data = TLFBData('path_to_tlfb.csv')
 ```
 
@@ -115,7 +115,7 @@ the number of subjects, and any applicable abnormal data records, including dupl
 and outliers. In terms of outliers, you can specify the minimal and maximal values for 
 the substance use amounts. Those values outside of the range are considered outliers 
 and are shown in the summary report.
-```
+```python
 # No outlier identification
 tlfb_data.profile_data()
 
@@ -125,7 +125,7 @@ tlfb_data.profile_data(0, 100)
 #### 2c. Drop data records with any missing values
 Those records with missing *id*, *date*, or *amount* will be removed. The number of removed
 records will be reported.
-```
+```python
 tlfb_data.drop_na_records()
 ```
 
@@ -134,7 +134,7 @@ Duplicate records are identified based on __*id*__ and __*date*__. There are dif
 ways to remove duplicates: *min*, *max*, or *mean*, which keep the minimal, maximal, 
 or mean of the duplicate records. You can also have the options to remove all duplicates. 
 You can also simply view the duplicates and handle these duplicates manually.
-```
+```python
 # Check only, no actions for removing duplicates
 tlfb_data.check_duplicates(None)
 
@@ -158,7 +158,7 @@ the values lower than the minimal will be recoded as the minimal, while the valu
 than the maximal will be recoded as the maximal.
 
 In either case, the number of recoded outliers will be reported.
-```
+```python
 # Set the minimal and maximal values for outlier detection, by default, the outliers will be dropped
 tlfb_data.recode_outliers(0, 100)
 
@@ -184,7 +184,7 @@ to interpolate the entire time window
 It's also possible to integrate biochemical verification data with the TLFB imputation. The details
 are discussed later.
 
-```
+```python
 # Use the mean
 tlfb_data.impute_data("uniform")
 
@@ -201,7 +201,7 @@ tlfb_data.impute_data(5)
 Similar to reading the TLFB data, you can read files in .csv, .txt, .xls, or .xlsx format.
 It's also supported if your visit dataset is in the univariate format, which means that
 each subject has only one row of data and the columns are the visits and their dates.
-```
+```python
 # Read the visit data in the long format (the default option)
 visit_data = VisitData("file_path.csv")
 
@@ -219,7 +219,7 @@ Importantly, it will also detect if any subjects have their visits with the date
 are out of the order. By default, the order is inferred using the numeric or alphabetic 
 order of the visits. These records with possibly incorrect data may result in wrong
 abstinence calculations.
-```
+```python
 # No outlier identification
 visit_data.profile_data()
 
@@ -233,7 +233,7 @@ visit_data.profile_data(expected_visit_order=[1, 2, 3, 5, 4])
 #### 3c. Drop data records with any missing values 
 Those records with missing *id*, *visit*, or *date* will be removed. The number of removed
 records will be reported.
-```
+```python
 visit_data.drop_na_records()
 ```
 
@@ -242,7 +242,7 @@ Duplicate records are identified based on __*id*__ and __*visit*__. There are di
 ways to remove duplicates: *min*, *max*, or *mean*, which keep the minimal, maximal, 
 or mean of the duplicate records. The options are the same as how you deal with duplicates
 in the TLFB data.
-```
+```python
 # Check only, no actions for removing duplicates
 visit_data.check_duplicates(None)
 
@@ -262,7 +262,7 @@ visit_data.check_duplicates(False)
 #### 3e. Recode outliers (optional)
 Those values outside the specified range are considered outliers. The syntax and usage is
 the same as what you deal with the TLFB dataset
-```
+```python
 # Set the minimal and maximal, and outliers will be removed by default
 visit_data.recode_outliers("07/01/2000", "12/08/2020")
 
@@ -279,7 +279,7 @@ following two imputation options are available. The *"freq"* option will use the
 frequent difference value, which is the default option. The *"mean"* option will use the
 mean difference value.
 
-```
+```python
 # Use the most frequent difference value between the missing visit and the anchor visit
 visit_data.impute_data(impute="freq")
 
@@ -294,13 +294,13 @@ visit_data.impute_data(anchor_visit=1)
 #### 4a. Create the abstinence calculator using the TLFB and visit data
 To calculate abstinence, you instantiate the calculator by setting the TLFB and visit data. By default,
 only those who have both TLFB and visit data will be scored.
-```
+```python
 abst_cal = AbstinenceCalculator(tlfb_data, visit_data)
 ```
 
 #### 4b. Check data availability (optional)
 You can find out how many subjects have the TLFB data and how many have the visit data.
-```
+```python
 abst_cal.check_data_availability()
 ```
 
@@ -316,7 +316,7 @@ for a particular abstinence calculation.
 To calculate the continuous abstinence, you need to specify the visit when the window starts
 and the visit when the window ends. To provide greater flexibility, you can specify a series
 of visits to generate multiple time windows.
-```
+```python
 # Calculate only one window
 abst_df, lapse_df = abst_cal.abstinence_cont(2, 5)
 
@@ -331,7 +331,7 @@ abst_df, lapse_df = abst_cal.abstinence_cont(2, [5, 6, 7], ["abst_var1", "abst_v
 To calculate the point-prevalence abstinence, you need to specify the visits. You'll need to
 specify the number of days preceding the time points. To provide greater flexibility, you
 can specify multiple visits and multiple numbers of days.
-```
+```python
 # Calculate only one time point, 7-d point-prevalence
 abst_df, lapse_df = abst_cal.abstinence_pp(5, 7)
 
@@ -344,7 +344,7 @@ To calculate the prolonged abstinence, you need to specify the quit visit and th
 days for the grace period (the default length is 14 days). You can calculate abstinence for
 multiple time points. There are several options regarding how a lapse is defined. See below
 for some examples.
-```
+```python
 # Lapse isn't allowed
 abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], False)
 
@@ -377,7 +377,7 @@ id | itt_abst_cont_v5_v2 | itt_abst_cont_v6_v2 | itt_abst_pp7_v5 | itt_abst_pp7_
 1003 | 0 | 0 | 1 | 1
 1004 | 0 | 0 | 1 | 0 
 1005 | 0 | 0 | 0 | 1
-```
+```python
 abst_cal.merge_abst_data_to_file([abst_df0, abst_df1, abst_df2], "merged_abstinence_data.csv")
 ```
 #### 5b. The lapse datasets
@@ -392,7 +392,7 @@ id | date | amount | abst_name
 1000 | 02/06/2019 | 9 | itt_abst_cont_v6
 1001 | 04/07/2019 | 10 | itt_abst_cont_v6
 1002 | 05/08/2019 | 8 | itt_abst_cont_v6
-```
+```python
 abst_cal.merge_lapse_data_to_file([lapse_df0, lapse_df1, lapse_df2], "merged_lapse_data.csv")
 ```
 
@@ -410,7 +410,7 @@ __*amount*__.
 #### Ia. Prepare the Biochemical Dataset
 A key operation to prepare the biochemical dataset is to interpolate extra meaningful records based on the exiting 
 records using the `interpolate_biochemical_data` function, as shown below.
-```
+```python
 # First read the biochemical verification data
 biochemical_data = TLFBData("beam_co.csv", included_subjects=included_subjects, abst_cutoff=4)
 biochemical_data.profile_data()
@@ -426,7 +426,7 @@ biochemical_data.check_duplicates()
 #### Ib. Integrate the Biochemical Dataset with the TLFB data
 The following code shows you how the integration can be performed. Everything else stays the same, except that in the
 `impute_data` method, you need to **specify the `biochemical_data` argument**.
-```
+```python
 tlfb_data = TLFBData("beam_tlfb.csv", included_subjects=included_subjects)
 tlfb_sample_summary, tlfb_subject_summary = tlfb_data.profile_data()
 tlfb_data.drop_na_records()
@@ -438,7 +438,7 @@ tlfb_data.impute_data(biochemical_data=biochemical_data)
 ### II. Calculate Retention Rates
 You can also calculate the retention rate with the visit data with a simple function call, as shown below. 
 If a filepath is specified, it will write to a file.
-```
+```python
 # Just show the retention rates results
 visit_data.get_retention_rates()
 
@@ -448,7 +448,7 @@ visit_data.get_retention_rates('retention_rates.csv')
 
 ### III. Calculate Abstinence Rates
 You can calculate the computed abstinence by providing the list of pandas DataFrame objects.
-```
+```python
 # Calculate abstinence by various definitions
 abst_pp, lapses_pp = abst_cal.abstinence_pp([9, 10], 7, including_end=True)
 abst_pros, lapses_pros = abst_cal.abstinence_prolonged(4, [9, 10], '5 cigs')
