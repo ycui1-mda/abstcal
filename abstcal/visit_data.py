@@ -33,7 +33,7 @@ class VisitData(CalculatorData):
         """
         if data_format == "wide":
             df_wide = super().read_data_from_path(filepath)
-            df_long = df_wide.melt(id_vars="id")
+            df_long = df_wide.melt(id_vars="id", var_name="visit", value_name="date")
         else:
             df_long = super().read_data_from_path(filepath)
         self.data = self._validated_data(df_long)
@@ -213,13 +213,14 @@ class VisitData(CalculatorData):
 
     def _check_visit_order(self):
         if self.expected_ordered_visits is not None:
+            _temp_data = self.data.copy()
             if isinstance(self.expected_ordered_visits, list):
-                self.data['visit'] = self.data['visit'].map(
+                _temp_data['visit'] = self.data['visit'].map(
                     {visit: i for i, visit in enumerate(self.expected_ordered_visits)})
             else:
                 _show_warning("Supported options for expected_ordered_visits are list of visits, None, and infer. "
                               "The expected visit order is inferred to check if the dates are in the correct order.")
-            sorted_visit_data = self.data.sort_values(by=['id', 'visit'], ignore_index=True)
+            sorted_visit_data = _temp_data.sort_values(by=['id', 'visit'], ignore_index=True)
             sorted_visit_data['ascending'] = sorted_visit_data.groupby(['id'])['date'].diff().map(
                 lambda x: True if x is pd.NaT or x.days >= 0 else False
             )

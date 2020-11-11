@@ -201,12 +201,20 @@ tlfb_data.impute_data(5)
 Similar to reading the TLFB data, you can read files in .csv, .txt, .xls, or .xlsx format.
 It's also supported if your visit dataset is in the univariate format, which means that
 each subject has only one row of data and the columns are the visits and their dates.
+
+Importantly, it will also detect if any subjects have their visits with the dates that
+are out of the order. By default, the order is inferred using the numeric or alphabetic 
+order of the visits. These records with possibly incorrect data may result in wrong
+abstinence calculations.
 ```python
 # Read the visit data in the long format (the default option)
 visit_data = VisitData("file_path.csv")
 
 # Read the visit data in the wide format
 visit_data = VisitData("file_path.csv", "wide")
+
+# Read the visit data and specify the order of the visit
+visit_data = VisitData("file_path.csv", expected_ordered_visits=[1, 2, 3, 5, 6])
 ```
 
 #### 3b. Profile the visit data
@@ -214,20 +222,12 @@ You will see a report of the data summary, such as the number of records, the nu
 subjects, and any applicable abnormal data records, including duplicates and outliers. 
 In terms of outliers, you can specify the minimal and maximal values for the dates. The
 dates will be inferred from strings. Please use the format *mm/dd/yyyy*.
-
-Importantly, it will also detect if any subjects have their visits with the dates that
-are out of the order. By default, the order is inferred using the numeric or alphabetic 
-order of the visits. These records with possibly incorrect data may result in wrong
-abstinence calculations.
 ```python
 # No outlier identification
 visit_data.profile_data()
 
 # Outlier identification
 visit_data.profile_data("07/01/2000", "12/08/2020")
-
-# Specify the expected order of the visits
-visit_data.profile_data(expected_visit_order=[1, 2, 3, 5, 4])
 ```
 
 #### 3c. Drop data records with any missing values 
@@ -412,7 +412,7 @@ A key operation to prepare the biochemical dataset is to interpolate extra meani
 records using the `interpolate_biochemical_data` function, as shown below.
 ```python
 # First read the biochemical verification data
-biochemical_data = TLFBData("beam_co.csv", included_subjects=included_subjects, abst_cutoff=4)
+biochemical_data = TLFBData("test_co.csv", included_subjects=included_subjects, abst_cutoff=4)
 biochemical_data.profile_data()
 
 # Interpolate biochemical records based on the half-life
@@ -427,7 +427,7 @@ biochemical_data.check_duplicates()
 The following code shows you how the integration can be performed. Everything else stays the same, except that in the
 `impute_data` method, you need to **specify the `biochemical_data` argument**.
 ```python
-tlfb_data = TLFBData("beam_tlfb.csv", included_subjects=included_subjects)
+tlfb_data = TLFBData("test_tlfb.csv", included_subjects=included_subjects)
 tlfb_sample_summary, tlfb_subject_summary = tlfb_data.profile_data()
 tlfb_data.drop_na_records()
 tlfb_data.check_duplicates()
