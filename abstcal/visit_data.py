@@ -134,7 +134,7 @@ class VisitData(CalculatorData):
         plt.show()
 
         for visit in self.visits - {anchor_visit}:
-            visit_dates = self._visit_data.dropna().loc[self.data['visit'] == visit, :].\
+            visit_dates = self._visit_data.dropna().loc[self._visit_data['visit'] == visit, :].\
                 sort_values(by=['interval_to_anchor', 'id'], ignore_index=True)
             visit_summary[f"v{visit}_v{anchor_visit}_interval_days_range"] = \
                 f"{visit_dates['interval_to_anchor'].min()} - {visit_dates['interval_to_anchor'].max()}"

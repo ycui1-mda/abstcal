@@ -10,4 +10,5 @@ abstcal/visit_data.py
 abstcal.egg-info/PKG-INFO
 abstcal.egg-info/SOURCES.txt
 abstcal.egg-info/dependency_links.txt
+abstcal.egg-info/requires.txt
 abstcal.egg-info/top_level.txt

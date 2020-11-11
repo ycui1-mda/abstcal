@@ -56,7 +56,7 @@ class TLFBData(CalculatorData):
         """
         tlfb_summary_series = self._get_tlfb_sample_summary(min_amount_cutoff, max_amount_cutoff)
         tlfb_subject_summary = self._get_tlfb_subject_summary(min_amount_cutoff, max_amount_cutoff)
-        sns.distplot(self.data['amount'])
+        sns.displot(self.data['amount'])
         plt.show()
         return tlfb_summary_series, tlfb_subject_summary
 
