@@ -1,8 +1,8 @@
 Metadata-Version: 2.1
 Name: abstcal
-Version: 0.6.2
-Summary: Calculate abstinence using the timeline followback data in substance research
-Home-page: https://github.com/ycui1/abstcal
+Version: 0.6.3
+Summary: Calculate abstinence using the timeline followback data in substance research.
+Home-page: https://github.com/ycui1-mda/abstcal
 Author: Yong Cui
 Author-email: yong.cui01@gmail.com
 License: UNKNOWN
@@ -487,5 +487,5 @@ Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
-Requires-Python: >=3.6
+Requires-Python: >=3.8
 Description-Content-Type: text/markdown

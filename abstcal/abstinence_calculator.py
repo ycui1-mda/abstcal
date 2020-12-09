@@ -20,7 +20,7 @@ class AbstinenceCalculator:
         """
         self.tlfb_data = tlfb_data
         self.visit_data = visit_data
-        self.subject_ids = sorted(tlfb_data.subject_ids & tlfb_data.subject_ids)
+        self.subject_ids = sorted(tlfb_data.subject_ids & visit_data.subject_ids)
 
     def check_data_availability(self):
         tlfb_ids = pd.Series({subject_id: 'Yes' for subject_id in self.tlfb_data.subject_ids}, name='TLFB Data')

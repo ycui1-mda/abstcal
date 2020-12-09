@@ -15,7 +15,8 @@ class TLFBData(CalculatorData):
         """
         Create the instance object for the TLFB data
 
-        :param filepath: Union[str, path], the file path to the TLFB data
+        :param filepath: Union[str, path], the file path to the TLFB data;
+            for the web app, you can directly pass the buffer
 
         :param abst_cutoff: Union[float, int], the cutoff equal to or below which is abstinent
 
@@ -243,7 +244,7 @@ class TLFBData(CalculatorData):
         """
         if impute is None or str(impute).lower() == "none":
             return
-        if not (impute in ("uniform", "linear") or impute.isnumeric()):
+        if not (impute in ("uniform", "linear") or str(impute).isnumeric()):
             raise InputArgumentError("The imputation mode can only be None, 'uniform', 'linear', "
                                      "or a numeric value.")
         if 'imputation_code' in self.data.columns:
@@ -263,8 +264,12 @@ class TLFBData(CalculatorData):
             to_concat.append(last_records)
 
         if biochemical_data is not None:
-            _biochemical_data = \
-                biochemical_data.data.drop(columns="imputation_code").rename(columns={"amount": "bio_amount"})
+            if "imputation_code" in biochemical_data.data.columns:
+                _biochemical_data = \
+                    biochemical_data.data.drop(columns="imputation_code").rename(columns={"amount": "bio_amount"})
+            else:
+                _biochemical_data = \
+                    biochemical_data.data.rename(columns={"amount": "bio_amount"})
             _merged = self.data.merge(_biochemical_data, how="left", on=["id", "date"])
             bio_amount = (self.abst_cutoff + 1) if overridden_amount == 'infer' else float(overridden_amount)
 

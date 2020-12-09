@@ -13,6 +13,7 @@ class VisitData(CalculatorData):
         Create the instance object for the visit data
 
         :param filepath: Union[str, path], the file path to the visit data
+            for the web app, you can directly pass the buffer
 
         :param data_format: Union["long", "wide"], how the visit data are organized
             long: the data should have three columns, id, visit, and date

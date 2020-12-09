@@ -1,6 +1,7 @@
 from enum import Enum
 from pathlib import Path
 import pandas as pd
+from io import BytesIO
 from abstcal.calculator_error import InputArgumentError, FileFormatError, FileExtensionError, _show_warning
 
 
@@ -70,21 +71,25 @@ class CalculatorData:
         """
         Read data from the specified path
 
-        :param filepath: Union[str, Path], the path to the file to be read
+        :param filepath: Union[str, Path, BytesIO], the path to the file to be read
             Supported file types: comma-separated, tab-separated, and Excel spreadsheet
+            for the web app, you can directly pass the buffer
 
         :return: a DataFrame
         """
-        path = Path(filepath)
-        file_extension = path.suffix.lower()
-        if file_extension == ".csv":
-            df = pd.read_csv(filepath, infer_datetime_format=True)
-        elif file_extension in (".xls", ".xlsx", ".xlsm", ".xlsb"):
-            df = pd.read_excel(filepath, infer_datetime_format=True)
-        elif file_extension == ".txt":
-            df = pd.read_csv(filepath, sep='\t', infer_datetime_format=True)
+        if isinstance(filepath, BytesIO):
+            df = pd.read_csv(filepath)
         else:
-            raise FileExtensionError(filepath)
+            path = Path(filepath)
+            file_extension = path.suffix.lower()
+            if file_extension == ".csv":
+                df = pd.read_csv(filepath, infer_datetime_format=True)
+            elif file_extension in (".xls", ".xlsx", ".xlsm", ".xlsb"):
+                df = pd.read_excel(filepath, infer_datetime_format=True)
+            elif file_extension == ".txt":
+                df = pd.read_csv(filepath, sep='\t', infer_datetime_format=True)
+            else:
+                raise FileExtensionError(filepath)
         return df
 
     @staticmethod
