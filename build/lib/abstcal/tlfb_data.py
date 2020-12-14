@@ -15,8 +15,8 @@ class TLFBData(CalculatorData):
         """
         Create the instance object for the TLFB data
 
-        :param filepath: Union[str, path], the file path to the TLFB data;
-            for the web app, you can directly pass the buffer
+        :param filepath: Union[str, path, DataFrame], the file path to the TLFB data or the created DataFrame
+
 
         :param abst_cutoff: Union[float, int], the cutoff equal to or below which is abstinent
 
@@ -24,7 +24,7 @@ class TLFBData(CalculatorData):
             the default option "all" means that all subjects in the dataset will be used
 
         """
-        df = super().read_data_from_path(filepath)
+        df = filepath if isinstance(filepath, pd.DataFrame) else super().read_data_from_path(filepath)
         self.data = self._validated_data(df)
         if included_subjects and included_subjects != "all":
             self.data = self.data.loc[self.data["id"].isin(included_subjects), :].reset_index(drop=True)
@@ -188,11 +188,11 @@ class TLFBData(CalculatorData):
         :return: Summary of the recoding
         """
         recode_summary = dict()
-        outlier_count_low = pd.Series(self.data['amount'] < floor_amount).sum()
+        outlier_count_low = int(pd.Series(self.data['amount'] < floor_amount).sum())
         recode_summary[f'Number of outliers (< {floor_amount})'] = outlier_count_low
         self.data['amount'] = self.data['amount'].map(
             lambda x: np.nan if drop_outliers and x < floor_amount else max(x, floor_amount))
-        outlier_count_high = pd.Series(self.data['amount'] > ceil_amount).sum()
+        outlier_count_high = int(pd.Series(self.data['amount'] > ceil_amount).sum())
         recode_summary[f'Number of outliers (> {ceil_amount})'] = outlier_count_high
         self.data['amount'] = self.data['amount'].map(
             lambda x: np.nan if drop_outliers and x > ceil_amount else min(x, ceil_amount))

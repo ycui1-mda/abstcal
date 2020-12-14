@@ -12,8 +12,7 @@ class VisitData(CalculatorData):
         """
         Create the instance object for the visit data
 
-        :param filepath: Union[str, path], the file path to the visit data
-            for the web app, you can directly pass the buffer
+        :param filepath: Union[str, path, DataFrame], the file path to the visit data or the DataFrame
 
         :param data_format: Union["long", "wide"], how the visit data are organized
             long: the data should have three columns, id, visit, and date
@@ -32,11 +31,9 @@ class VisitData(CalculatorData):
             the default option "all" means that all subjects in the dataset will be used
 
         """
+        df_long = filepath if isinstance(filepath, pd.DataFrame) else super().read_data_from_path(filepath)
         if data_format == "wide":
-            df_wide = super().read_data_from_path(filepath)
-            df_long = df_wide.melt(id_vars="id", var_name="visit", value_name="date")
-        else:
-            df_long = super().read_data_from_path(filepath)
+            df_long = df_long.melt(id_vars="id", var_name="visit", value_name="date")
         self.data = self._validated_data(df_long)
         if included_subjects != "all":
             self.data = self.data.loc[self.data["id"].isin(included_subjects), :]
@@ -251,12 +248,12 @@ class VisitData(CalculatorData):
         """
         recode_summary = dict()
         casted_floor_date = pd.to_datetime(floor_date, infer_datetime_format=True)
-        outlier_count_low = pd.Series(self.data['date'] < casted_floor_date).sum()
+        outlier_count_low = int(pd.Series(self.data['date'] < casted_floor_date).sum())
         recode_summary[f"Number of outliers (< {casted_floor_date.strftime('%m/%d/%Y')})"] = outlier_count_low
         self.data['date'] = self.data['date'].map(
             lambda x: np.nan if drop_outliers and x < casted_floor_date else max(x, casted_floor_date))
         casted_ceil_date = pd.to_datetime(ceil_date, infer_datetime_format=True)
-        outlier_count_high = pd.Series(self.data['date'] > casted_ceil_date).sum()
+        outlier_count_high = int(pd.Series(self.data['date'] > casted_ceil_date).sum())
         recode_summary[f"Number of outliers (> {casted_ceil_date.strftime('%m/%d/%Y')})"] = outlier_count_high
         self.data['date'] = self.data['date'].map(
             lambda x: np.nan if drop_outliers and x > casted_ceil_date else min(x, casted_ceil_date))

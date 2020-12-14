@@ -6,7 +6,6 @@ from abstcal.tlfb_data import TLFBData
 from abstcal.visit_data import VisitData
 from abstcal.calculator_error import InputArgumentError, _show_warning
 
-
 class AbstinenceCalculator:
     def __init__(self, tlfb_data: TLFBData, visit_data: VisitData):
         """
@@ -20,7 +19,7 @@ class AbstinenceCalculator:
         """
         self.tlfb_data = tlfb_data
         self.visit_data = visit_data
-        self.subject_ids = sorted(tlfb_data.subject_ids & tlfb_data.subject_ids)
+        self.subject_ids = sorted(tlfb_data.subject_ids & visit_data.subject_ids)
 
     def check_data_availability(self):
         tlfb_ids = pd.Series({subject_id: 'Yes' for subject_id in self.tlfb_data.subject_ids}, name='TLFB Data')
@@ -64,7 +63,7 @@ class AbstinenceCalculator:
 
             start_dates = self.visit_data.get_visit_dates(subject_id, start_visit, mode=mode)
             start_date = start_dates[0] if start_dates else pd.NaT
-            end_dates = self.visit_data.get_visit_dates(subject_id, end_visits, including_end, mode=mode)
+            end_dates = self.visit_data.get_visit_dates(subject_id, end_visits, int(including_end), mode=mode)
 
             for end_date_i, end_date in enumerate(end_dates):
                 abstinent, lapse = self._score_continuous(subject_id, start_date, end_date, mode)
@@ -117,7 +116,7 @@ class AbstinenceCalculator:
 
         for subject_id in self.subject_ids:
             result = [subject_id]
-            end_dates = self.visit_data.get_visit_dates(subject_id, end_visits, including_end, mode=mode)
+            end_dates = self.visit_data.get_visit_dates(subject_id, end_visits, int(including_end), mode=mode)
 
             for day_i, day in enumerate(days):
                 for end_date_i, end_date in enumerate(end_dates):
@@ -195,7 +194,7 @@ class AbstinenceCalculator:
             result = [subject_id]
             start_dates = self.visit_data.get_visit_dates(subject_id, quit_visit, grace_days, mode=mode)
             start_date = start_dates[0] if start_dates else pd.NaT
-            end_dates = self.visit_data.get_visit_dates(subject_id, end_visits, including_end, mode=mode)
+            end_dates = self.visit_data.get_visit_dates(subject_id, end_visits, int(including_end), mode=mode)
 
             for criterion_i, criterion in enumerate(criteria):
                 for end_date_i, end_date in enumerate(end_dates):

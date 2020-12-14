@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="abstcal",
-    version="0.6.4",
+    version="0.7",
     author="Yong Cui",
     author_email="yong.cui01@gmail.com",
     description="Calculate abstinence using the timeline followback data in substance research.",
