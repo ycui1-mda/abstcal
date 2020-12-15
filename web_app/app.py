@@ -8,7 +8,8 @@ import streamlit as st
 from streamlit.report_thread import get_report_ctx
 
 # Hide tracebacks
-# sys.tracebacklimit = 0
+sys.tracebacklimit = 0
+
 
 # Use the following session to track data
 # Reference: https://gist.github.com/tvst/036da038ab3e999a64497f42de966a92
@@ -77,15 +78,15 @@ session_state = get(tlfb_data=None, visit_data=None)
 duplicate_options_mapped = {
     "Keep the minimal only": "min",
     "Keep the maximal only": "max",
-    "Keep the mean only":    "mean",
+    "Keep the mean only": "mean",
     "Remove all duplicates": False
 }
 duplicate_options = list(duplicate_options_mapped)
 duplicate_options_mapped_reversed = {value: key for key, value in duplicate_options_mapped.items()}
 
 outlier_options_mapped = {
-    "Don't examine outliers":                       None,
-    "Remove the outliers":                          True,
+    "Don't examine outliers": None,
+    "Remove the outliers": True,
     "Impute the outliers with the bounding values": False
 }
 outlier_options = list(outlier_options_mapped)
@@ -203,10 +204,12 @@ def _load_overview_elements():
     st.markdown("If you want to re-do your calculation, please press the following button. If you need to update the "
                 "uploaded files, please remove them manually and re-upload the new ones.")
 
-    st.markdown(f"Current Version of abstcal: {ac.__version__}")
     if st.button("Reset Data"):
         session_state.tlfb_data = None
         session_state.visit_data = None
+
+    st.markdown(f"Current Version of abstcal: {ac.__version__}")
+    st.markdown(f"Last Update Date: Dec 15, 2020")
 
 
 def _load_tlfb_elements():
