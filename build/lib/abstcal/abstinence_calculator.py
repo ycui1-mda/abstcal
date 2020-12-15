@@ -6,6 +6,7 @@ from abstcal.tlfb_data import TLFBData
 from abstcal.visit_data import VisitData
 from abstcal.calculator_error import InputArgumentError, _show_warning
 
+
 class AbstinenceCalculator:
     def __init__(self, tlfb_data: TLFBData, visit_data: VisitData):
         """

@@ -5,11 +5,11 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="abstcal",
-    version="0.7",
+    version="0.7.1",
     author="Yong Cui",
     author_email="yong.cui01@gmail.com",
     description="Calculate abstinence using the timeline followback data in substance research.",
-    install_requires=['pandas', 'numpy', 'matplotlib', 'seaborn'],
+    install_requires=['pandas', 'numpy', 'matplotlib', 'seaborn', 'streamlit'],
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/ycui1-mda/abstcal",

@@ -202,6 +202,8 @@ def _load_overview_elements():
     st.subheader("Advanced Settings")
     st.markdown("If you want to re-do your calculation, please press the following button. If you need to update the "
                 "uploaded files, please remove them manually and re-upload the new ones.")
+
+    st.markdown(f"Current Version of abstcal: {ac.__version__}")
     if st.button("Reset Data"):
         session_state.tlfb_data = None
         session_state.visit_data = None
@@ -551,6 +553,8 @@ def _process_visit_data():
         st.write(visit_data.impute_data(visit_data_params["anchor_visit"], visit_data_params["imputation_mode"]))
     else:
         st.write("Imputation Action: None")
+    st.write("Visit Attendance Summary")
+    st.write(visit_data.get_retention_rates())
 
 
 def _load_data_summary(data, data_params):
@@ -578,6 +582,7 @@ def _load_data_summary(data, data_params):
         )
     else:
         st.write("Outliers Action: None")
+
 
 
 def _load_cal_elements():
