@@ -369,7 +369,8 @@ def _load_tlfb_elements():
                 left_col, right_col = st.beta_columns(2)
                 bio_data_params["half_life"] = left_col.number_input(
                     "Half Life of the Biochemical Measure in Days",
-                    value=1,
+                    min_value=0.0,
+                    value=1.0,
                     step=0.01
                 )
                 bio_data_params["days_interpolation"] = right_col.number_input(
