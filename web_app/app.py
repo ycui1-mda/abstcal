@@ -369,10 +369,11 @@ def _load_tlfb_elements():
                 left_col, right_col = st.beta_columns(2)
                 bio_data_params["half_life"] = left_col.number_input(
                     "Half Life of the Biochemical Measure in Days",
-                    value=1
+                    value=1,
+                    step=0.01
                 )
                 bio_data_params["days_interpolation"] = right_col.number_input(
-                    "The Number of Days of Imputation",
+                    "The Number of Days of Interpolation",
                     value=1,
                     step=1
                 )
@@ -661,7 +662,7 @@ def _load_cal_elements():
 
 
 def _calculate_abstinence():
-    st.header("Calculation Summary")
+    st.header("Calculation Results Summary")
     if session_state.tlfb_data is None or session_state.visit_data is None:
         raise ValueError("Please process the TLFB and Visit data first.")
 
@@ -693,6 +694,8 @@ def _calculate_abstinence():
             abst_params_shared["including_end"],
             abst_params_shared["mode"]
         ))
+    st.subheader("Abstinence Calculated for Subjects")
+    st.markdown(f"{sorted(calculator.subject_ids)}")
     abst_df = calculator.merge_abst_data([x[0] for x in calculation_results])
     st.subheader("Abstinence Data")
     st.write(abst_df)
