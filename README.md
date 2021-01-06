@@ -25,6 +25,8 @@ using various criteria.
 It supports the calculation of abstinence of varied definitions, 
 including continuous, point-prevalence, and prolonged using either intent-to-treat (ITT) 
 or responders-only assumption. It can optionally integrate biochemical verification data.
+
+To use the package's web version, please go to [abstcal Hosted by Streamlit](https://share.streamlit.io/ycui1-mda/abstcal/web_app/app.py).
 *********
 ## Required Datasets
 #### The Timeline Followback Data (Required)
