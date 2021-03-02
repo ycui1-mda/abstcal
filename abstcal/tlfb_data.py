@@ -17,7 +17,6 @@ class TLFBData(CalculatorData):
 
         :param filepath: Union[str, path, DataFrame], the file path to the TLFB data or the created DataFrame
 
-
         :param abst_cutoff: Union[float, int], the cutoff equal to or below which is abstinent
 
         :param included_subjects: Union[list, tuple], the list of subject ids that are included in the dataset,

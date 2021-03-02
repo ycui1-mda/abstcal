@@ -8,7 +8,8 @@ can find information at the [Python](https://www.python.org/) website. The pip t
 common Python package management tool, and you can find information about its use instruction at the 
 [pypa](https://pip.pypa.io/en/stable/installing/) website.
 
-If you're not familiar with Python coding, you can run the [Jupyter Notebook](https://github.com/ycui1/abstcal/blob/eb290f468db5f35ccf3922f5fc0151cbeb8fe7af/abstcal_example_code.ipynb) 
+If you're not familiar with Python coding, you can run the 
+[Jupyter Notebook](https://github.com/ycui1-mda/abstcal/blob/88543f99044dfd0566168e922bab3d81dfb76a14/tests/abstcal_use_example.ipynb) 
 included on this page on [Google Colab](https://colab.research.google.com), which is an online platform 
 to run your Python code remotely on a server.
 
@@ -380,7 +381,7 @@ id | itt_abst_cont_v5_v2 | itt_abst_cont_v6_v2 | itt_abst_pp7_v5 | itt_abst_pp7_
 1004 | 0 | 0 | 1 | 0 
 1005 | 0 | 0 | 0 | 1
 ```python
-abst_cal.merge_abst_data_to_file([abst_df0, abst_df1, abst_df2], "merged_abstinence_data.csv")
+abst_cal.merge_abst_data([abst_df0, abst_df1, abst_df2], "merged_abstinence_data.csv")
 ```
 #### 5b. The lapse datasets
 To output the lapse datasets that you have created from calling the abstinence calculation
@@ -395,7 +396,7 @@ id | date | amount | abst_name
 1001 | 04/07/2019 | 10 | itt_abst_cont_v6
 1002 | 05/08/2019 | 8 | itt_abst_cont_v6
 ```python
-abst_cal.merge_lapse_data_to_file([lapse_df0, lapse_df1, lapse_df2], "merged_lapse_data.csv")
+abst_cal.merge_lapse_data([lapse_df0, lapse_df1, lapse_df2], "merged_lapse_data.csv")
 ```
 
 ## Additional Features

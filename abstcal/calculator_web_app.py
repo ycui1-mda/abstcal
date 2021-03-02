@@ -37,6 +37,7 @@ outlier_options_mapped_reversed = {value: key for key, value in outlier_options_
 # TLFB data-related params
 tlfb_data_params = dict.fromkeys([
     "data",
+    "use_raw_date",
     "cutoff",
     "subjects",
     "duplicate_mode",
@@ -122,6 +123,8 @@ def _load_elements():
     _load_visit_elements()
     st.markdown("***")
     _load_cal_elements()
+    st.markdown("***")
+    _load_script_element()
 
 
 def _load_overview_elements():
@@ -147,15 +150,71 @@ def _load_overview_elements():
     st.subheader("Advanced Settings")
     st.markdown("If you want to re-do your calculation, please press the following button. If you need to update the "
                 "uploaded files, please remove them manually and re-upload the new ones.")
-
     if st.button("Reset Data"):
         session_state.tlfb_data = None
         session_state.visit_data = None
 
-    st.markdown("Generate a Python script that you can integrate into your current data processing workflow.")
-    if st.button("Generate Python Script"):
-        calculation_script = "This is the generated script"
-        _pop_download_link(calculation_script, 'calculate_abst', 'Python Script', file_type='py')
+    st.subheader("Automatic Code Generation (Optional Feature)")
+    st.markdown("At the end of this page, after specifying the parameters (you don't have to upload any data for "
+                "privacy and security concerns or other reasons), you can generate a Python script for off-line use.")
+    spss_link = "https://www.ibm.com/support/knowledgecenter/en/SSLVMB_24.0.0/spss/" \
+                "programmability_option/python_scripting_intro.html"
+    st.markdown(f"""
+    * __Python Users__: you can use the script natively in your code.
+    * __R Users__: the reticulate package allows you to use Python 
+    ([Use Python in R](https://cran.r-project.org/web/packages/reticulate/))
+    * __Stata Users__: Stata 16.0+ has integrated Python compatibility 
+    ([Call Python from Stata](https://www.stata.com/python/))
+    * __SAS Users__: SAS 9.4M6 supports Python-based functionalities
+    ([Using Python functions inside SAS programs]
+    (https://blogs.sas.com/content/sgf/2019/06/04/using-python-functions-inside-sas-programs/))
+    * __SPSS Users__: you can run Python script using the GUI 
+    ([Run Python script in SPSS]({spss_link}))
+    """)
+    st.markdown("Non-Python users need to set up the Python environment with the necessary dependencies installed. If "
+                "you're not sure about this, it's recommended that you use this web app directly. If you're able to "
+                "integrate the Python script in your workflow using a different language, you're welcome to share "
+                "your experience here to benefit the research community.")
+    st.markdown("If you're interested in creating a package in other statistical languages (e.g., R), please feel "
+                "free to do so, and we're happy to collaborate.")
+
+
+def _generate_calculation_script():
+    script_lines = list()
+    script_lines.append("from abstcal import TLFBData, VisitData, AbstinenceCalculator")
+    needed_tlfb_data_params = tlfb_data_params.copy()
+    del needed_tlfb_data_params['data']
+    script_lines.append(f'tlfb_data_params = {needed_tlfb_data_params}')
+    script_lines.append('tlfb_source = "Please specify the file path"')
+    script_lines.append("""tlfb_data = TLFBData(
+        tlfb_source,
+        tlfb_data_params["cutoff"],
+        tlfb_data_params["subjects"]
+    )""")
+    if tlfb_data_params["imputation_mode"] is not None:
+        script_lines.append("""imputation_params = [
+            tlfb_data_params["imputation_mode"],
+            tlfb_data_params["imputation_last_record"],
+            tlfb_data_params["imputation_gap_limit"]
+        ]""")
+        if bio_data_params["data"] is not None:
+            script_lines.append("""biochemical_data = TLFBData(
+                bio_data_params["data"],
+                bio_data_params["cutoff"]
+            )""")
+            if bio_data_params["enable_interpolation"]:
+                script_lines.append("""biochemical_data.interpolate_biochemical_data(
+                    bio_data_params["half_life"],
+                    bio_data_params["days_interpolation"]
+                )""")
+            script_lines.append("""biochemical_data.drop_na_records()
+            biochemical_data.check_duplicates()
+            imputation_params.extend((biochemical_data, str(bio_data_params["overridden_amount"])))
+            """)
+        script_lines.append("tlfb_data.impute_data(*imputation_params)")
+
+    generated_script = '\n\n'.join(script_lines)
+    return generated_script
 
 
 def _load_tlfb_elements():
@@ -188,12 +247,27 @@ def _load_tlfb_elements():
         container.write("The TLFB data are shown here after loading.")
 
     with st.beta_expander("TLFB Data Processing Advanced Configurations"):
-        st.write("1. Specify the cutoff value for abstinence")
+        st.write("1. The TLFB data's date column can use either actual dates or arbitrary day counters. Please specify "
+                 "the date data type.")
+        tlfb_data_params["use_raw_dates"] = st.checkbox(
+            "Raw dates are used.",
+            value=True
+        )
+        if tlfb_data_params["use_raw_dates"]:
+            st.write("The TLFB dataset uses the actual dates.")
+        else:
+            st.write("The TLFB dataset uses arbitrary day counters.")
+        st.markdown("***")
+
+        st.write("2. Specify the cutoff value for abstinence")
         tlfb_data_params["cutoff"] = st.number_input(
-            "Equal or below the specified value is considered abstinent.",
+            "Cutoff Level",
             step=None
         )
-        st.write("2. Subjects used in the abstinence calculation.")
+        st.write(f"Data records with a value higher than {tlfb_data_params['cutoff']} are considered non-abstinent.")
+        st.markdown("***")
+
+        st.write("3. Subjects used in the abstinence calculation.")
         use_all_subjects = st.checkbox(
             "Use all subjects in the TLFB data",
             value=True
@@ -206,17 +280,26 @@ def _load_tlfb_elements():
                 tlfb_subjects,
                 default=tlfb_subjects
             )
-        st.write("3. TLFB Missing Data Imputation (missing data are those data gaps between study dates)")
+        st.write(f"Subjects used in the calculation: {tlfb_data_params['subjects']}")
+        st.markdown("***")
+
+        st.write("4. TLFB Missing Data Imputation (missing data are gaps having no records between study dates)")
+        imputation_summary = dict()
         imputation_mode_col, imputation_value_col = st.beta_columns(2)
-        tlfb_imputation_mode = tlfb_imputation_options_mapped[imputation_mode_col.selectbox(
+        selected_imputation_mode = imputation_mode_col.selectbox(
             "Select your option",
             tlfb_imputation_options,
             index=1,
             key="tlfb_imputation_mode"
-        )]
+        )
+        imputation_summary['Imputation Mode'] = selected_imputation_mode
+        tlfb_imputation_mode = tlfb_imputation_options_mapped[selected_imputation_mode]
         if tlfb_imputation_mode == 0:
             tlfb_imputation_mode = imputation_value_col.number_input(
-                "Specify the value to fill the missing TLFB records.")
+                "Specify the value to fill the missing TLFB records.",
+                value=0
+            )
+            imputation_summary['Missing data will be imputed using the value'] = tlfb_imputation_mode
 
         if tlfb_imputation_mode is not None:
             enable_gap = st.checkbox("Set limit for the maximal gap for imputation")
@@ -226,29 +309,49 @@ def _load_tlfb_elements():
                     value=30,
                     step=1
                 )
+                imputation_summary['Maximally Allowed Gap for Imputation'] = \
+                    f'{tlfb_data_params["imputation_gap_limit"]} days'
+            else:
+                imputation_summary['Enable Gap Limit'] = \
+                    "There is no set limit for the maximally allowed gap for imputation."
             enable_last_record = st.checkbox(
                 "Interpolate Last Record For Each Subject",
                 value=True
             )
             if enable_last_record:
                 tlfb_data_params["imputation_last_record"] = st.text_input(
-                    "Last Record Interpolation (fill foreword or a numeric value)",
+                    "Last Record Interpolation (fill forward or a numeric value)",
                     value="ffill"
-            )
+                )
+                if tlfb_data_params["imputation_last_record"] == "ffill":
+                    imputation_summary["Last Record Action"] = "Be filled with the last record for each subject"
+                else:
+                    imputation_summary["Last Record Filled With Value"] = tlfb_data_params["imputation_last_record"]
+            else:
+                imputation_summary["Last Record Action"] = "Will not interpolate any records beyond the last records"
         tlfb_data_params["imputation_mode"] = tlfb_imputation_mode
-        st.write("4. TLFB Duplicate Records Action (duplicates are those with the same id and date)")
-        tlfb_data_params["duplicate_mode"] = duplicate_options_mapped[st.selectbox(
+        imputation_summary_text = '\n\n* '.join([f'{key}: {value}' for key, value in imputation_summary.items()])
+        st.markdown(f"_Summary of the Imputation Parameters_\n\n* {imputation_summary_text}")
+        st.markdown("***")
+
+        st.write("5. TLFB Duplicate Records Action (duplicates are those with the same id and date)")
+        selected_duplicate_mode = st.selectbox(
             "Select your option",
             duplicate_options,
             index=len(duplicate_options) - 2,
             key="tlfb_duplicate_mode"
-        )]
-        st.write("5. TLFB Outliers Actions (outliers are those lower than the min or higher than the max)")
-        tlfb_data_params["outliers_mode"] = outlier_options_mapped[st.selectbox(
+        )
+        tlfb_data_params["duplicate_mode"] = duplicate_options_mapped[selected_duplicate_mode]
+        st.write(f"Duplicate Records: {selected_duplicate_mode}")
+        st.markdown("***")
+
+        st.write("6. TLFB Outliers Actions (outliers are those lower than the min or higher than the max)")
+        selected_outlier_mode = st.selectbox(
             "Select your option",
             outlier_options,
             key="tlfb_outliers_mode"
-        )]
+        )
+        tlfb_data_params["outliers_mode"] = outlier_options_mapped[selected_outlier_mode]
         if tlfb_data_params["outliers_mode"] is not None:
             left_col, right_col = st.beta_columns(2)
             tlfb_data_params["allowed_min"] = left_col.number_input(
@@ -261,7 +364,17 @@ def _load_tlfb_elements():
                 step=None,
                 value=100.0
             )
-        st.write("6. Biochemical Data for Abstinence Verification (Optional)")
+        if selected_outlier_mode == outlier_options[0]:
+            st.write("Any potential outliers won't be examined.")
+        elif selected_outlier_mode == outlier_options[1]:
+            st.write(f'Outliers will be removed if they are smaller than {tlfb_data_params["allowed_min"]} or '
+                     f'greater than {tlfb_data_params["allowed_max"]}')
+        else:
+            st.write(f'Outliers will be set to the boundary values if they are smaller than '
+                     f'{tlfb_data_params["allowed_min"]} or greater than {tlfb_data_params["allowed_max"]}')
+        st.markdown("***")
+
+        st.write("7. Biochemical Data for Abstinence Verification (Optional)")
         has_bio_data = st.checkbox("Integrate Biochemical Data For Abstinence Calculation")
         st.markdown("""
         If your study has collected biochemical verification data, such as carbon monoxide for smoking or breath alcohol 
@@ -292,20 +405,24 @@ def _load_tlfb_elements():
             else:
                 bio_container.write("The Biochemical data are shown here after loading.")
 
-            st.write("6.1. Specify the cutoff value for biochemically-verified abstinence")
+            st.write("7.1. Specify the cutoff value for biochemically-verified abstinence")
             bio_data_params["cutoff"] = st.number_input(
                 "Equal or below the specified value is considered abstinent.",
                 value=0.0,
                 step=None,
                 key="bio_cutoff"
             )
-            st.write("6.2. Override False Negative TLFB Records")
+            st.write(f'Data records with a value higher than {bio_data_params["cutoff"]} are considered non-abstinent.')
+
+            st.write("7.2. Override False Negative TLFB Records")
             bio_data_params["overridden_amount"] = st.number_input(
                 "Specify the TLFB amount to override a false negative TLFB record. "
                 "(self-report TLFB records say abstinent, but biochemical data invalidate them).",
                 value=tlfb_data_params["cutoff"] + 1
             )
-            st.write("6.3. Biochemical Data Interpolation")
+            st.write(f'False negative TLFB records will be overridden with {bio_data_params["overridden_amount"]}.')
+
+            st.write("7.3. Biochemical Data Interpolation")
             st.markdown("The calculator will estimate the biochemical levels based on the "
                         "current measures in the preceding days using the half-life.")
             bio_data_params["enable_interpolation"] = st.checkbox(
@@ -316,7 +433,7 @@ def _load_tlfb_elements():
                 bio_data_params["half_life"] = left_col.number_input(
                     "Half Life of the Biochemical Measure in Days",
                     min_value=0.0,
-                    value=1.0,
+                    value=0.25,
                     step=0.01
                 )
                 bio_data_params["days_interpolation"] = right_col.number_input(
@@ -325,7 +442,12 @@ def _load_tlfb_elements():
                     step=1
                 )
                 if bio_data_params["half_life"] == 0:
-                    raise ValueError("The half life of the biochemical measure should be greater than zero.")
+                    st.error("The half life of the biochemical measure should be greater than zero.")
+
+                st.write(f'Additional biochemical records (n={bio_data_params["days_interpolation"]}) will be '
+                         f'interpolated based on a half life of {bio_data_params["half_life"]} day(s).')
+            else:
+                st.write("There will be no interpolations for biochemical data.")
 
     processed_data = st.button("Get/Refresh TLFB Data Summary")
 
@@ -535,7 +657,6 @@ def _load_data_summary(data, data_params):
         st.write("Outliers Action: None")
 
 
-
 def _load_cal_elements():
     st.header("Section 3. Calculate Abstinence")
     abst_params_shared["mode"] = calculation_assumptions_mapped[
@@ -652,6 +773,15 @@ def _calculate_abstinence():
     st.subheader("Lapse Data")
     st.write(lapse_df)
     _pop_download_link(lapse_df, "lapse_data", "Lapse Data", False)
+
+
+def _load_script_element():
+    st.subheader("Python Script Generation")
+    st.markdown("To automatize data processing, you can generate a Python script based on the input.")
+    if st.button("Generate Python Script"):
+        calculation_script = _generate_calculation_script()
+        st.write(calculation_script)
+        # _pop_download_link(calculation_script, 'calculate_abst', 'Python Script', file_type='py')
 
 
 def _pop_download_link(df, filename, link_name, kept_index=False, file_type='csv'):
