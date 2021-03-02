@@ -1,7 +1,7 @@
 from collections import namedtuple
 from datetime import timedelta
-from abstcal.calculator_error import InputArgumentError
-from abstcal.calculator_data import CalculatorData, DataImputationCode
+from calculator_error import InputArgumentError
+from calculator_data import CalculatorData, DataImputationCode
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt

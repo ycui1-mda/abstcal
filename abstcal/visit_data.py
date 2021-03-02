@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import timedelta
-from abstcal.calculator_error import InputArgumentError, _show_warning
-from abstcal.calculator_data import CalculatorData, DataImputationCode
+from calculator_error import InputArgumentError, _show_warning
+from calculator_data import CalculatorData, DataImputationCode
 
 
 class VisitData(CalculatorData):

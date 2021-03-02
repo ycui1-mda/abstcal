@@ -2,77 +2,19 @@ import base64
 import datetime
 import io
 import sys
-import abstcal as ac
 import pandas as pd
 import streamlit as st
-from streamlit.report_thread import get_report_ctx
+from web_utils import get_saved_session
+from tlfb_data import TLFBData
+from visit_data import VisitData
+from abstinence_calculator import AbstinenceCalculator
+
+abstcal_version = '0.7.3'
+update_date = datetime.date.today().strftime("%m/%d/%Y")
 
 # Hide tracebacks
 sys.tracebacklimit = 0
-
-
-# Use the following session to track data
-# Reference: https://gist.github.com/tvst/036da038ab3e999a64497f42de966a92
-class SessionState(object):
-    def __init__(self, **kwargs):
-        """A new SessionState object.
-
-        Parameters
-        ----------
-        **kwargs : any
-            Default values for the session state.
-
-        Example
-        -------
-        >>> session_state = SessionState(user_name='', favorite_color='black')
-        >>> session_state.user_name = 'Mary'
-        ''
-        >>> session_state.favorite_color
-        'black'
-
-        """
-        for key, val in kwargs.items():
-            setattr(self, key, val)
-
-
-@st.cache(allow_output_mutation=True)
-def get_session(id, **kwargs):
-    return SessionState(**kwargs)
-
-
-def get(**kwargs):
-    """Gets a SessionState object for the current session.
-
-    Creates a new object if necessary.
-
-    Parameters
-    ----------
-    **kwargs : any
-        Default values you want to add to the session state, if we're creating a
-        new one.
-
-    Example
-    -------
-    >>> session_state = get(user_name='', favorite_color='black')
-    >>> session_state.user_name
-    ''
-    >>> session_state.user_name = 'Mary'
-    >>> session_state.favorite_color
-    'black'
-
-    Since you set user_name above, next time your script runs this will be the
-    result:
-    >>> session_state = get(user_name='', favorite_color='black')
-    >>> session_state.user_name
-    'Mary'
-
-    """
-    ctx = get_report_ctx()
-    id = ctx.session_id
-    return get_session(id, **kwargs)
-
-
-session_state = get(tlfb_data=None, visit_data=None)
+session_state = get_saved_session(tlfb_data=None, visit_data=None)
 
 # Shared options
 duplicate_options_mapped = {
@@ -187,6 +129,8 @@ def _load_overview_elements():
                 "will be saved or shared.")
     st.markdown("For advanced use cases and detailed API references, please refer to the package's "
                 "[GitHub](https://github.com/ycui1-mda/abstcal) page for more information.")
+    st.markdown(f"Current Version of abstcal: __{abstcal_version}__")
+    st.markdown(f"Last Update Date: __{update_date}__")
     st.markdown("**Disclaimer**: Not following the steps or variation in your source data may result in incorrect "
                 "abstinence results. Please verify your results for accuracy.")
     st.subheader("Basic Steps:")
@@ -208,8 +152,10 @@ def _load_overview_elements():
         session_state.tlfb_data = None
         session_state.visit_data = None
 
-    st.markdown(f"Current Version of abstcal: {ac.__version__}")
-    st.markdown(f"Last Update Date: Dec 15, 2020")
+    st.markdown("Generate a Python script that you can integrate into your current data processing workflow.")
+    if st.button("Generate Python Script"):
+        calculation_script = "This is the generated script"
+        _pop_download_link(calculation_script, 'calculate_abst', 'Python Script', file_type='py')
 
 
 def _load_tlfb_elements():
@@ -236,7 +182,7 @@ def _load_tlfb_elements():
         data = io.BytesIO(uploaded_file.getbuffer())
         tlfb_data_params["data"] = df = pd.read_csv(data)
         container.write(df)
-        tlfb_data = ac.TLFBData(df)
+        tlfb_data = TLFBData(df)
         tlfb_subjects = sorted(tlfb_data.subject_ids)
     else:
         container.write("The TLFB data are shown here after loading.")
@@ -392,7 +338,7 @@ def _process_tlfb_data():
     if tlfb_df is None:
         raise ValueError("Please specify the TLFB data in the file uploader above.")
 
-    tlfb_data = ac.TLFBData(
+    tlfb_data = TLFBData(
         tlfb_df,
         tlfb_data_params["cutoff"],
         tlfb_data_params["subjects"]
@@ -412,7 +358,7 @@ def _process_tlfb_data():
         bio_messages = list()
         if bio_data_params["data"] is not None:
             bio_messages.append("Note: Biochemical Data are used for TLFB imputation")
-            biochemical_data = ac.TLFBData(
+            biochemical_data = TLFBData(
                 bio_data_params["data"],
                 bio_data_params["cutoff"]
             )
@@ -466,7 +412,7 @@ def _load_visit_elements():
         data = io.BytesIO(uploaded_file.getbuffer())
         visit_data_params["data"] = df = pd.read_csv(data)
         container.write(df)
-        visit_data = ac.VisitData(df, visit_data_params['data_format'])
+        visit_data = VisitData(df, visit_data_params['data_format'])
         visits = sorted(visit_data.visits)
         visit_data_params['expected_visits'] = visits
         visit_subjects = sorted(visit_data.subject_ids)
@@ -542,7 +488,7 @@ def _process_visit_data():
         raise ValueError("Please upload your Visit data and make sure it's loaded successfully.")
 
     st.write("Data Overview")
-    visit_data = ac.VisitData(
+    visit_data = VisitData(
         visit_df,
         visit_data_params["data_format"],
         visit_data_params["expected_visits"],
@@ -667,7 +613,7 @@ def _calculate_abstinence():
     if session_state.tlfb_data is None or session_state.visit_data is None:
         raise ValueError("Please process the TLFB and Visit data first.")
 
-    calculator = ac.AbstinenceCalculator(session_state.tlfb_data, session_state.visit_data)
+    calculator = AbstinenceCalculator(session_state.tlfb_data, session_state.visit_data)
     calculation_results = list()
     if abst_pp_params["visits"]:
         calculation_results.append(calculator.abstinence_pp(
@@ -708,10 +654,13 @@ def _calculate_abstinence():
     _pop_download_link(lapse_df, "lapse_data", "Lapse Data", False)
 
 
-def _pop_download_link(df, filename, link_name, kept_index):
-    csv_file = df.to_csv(index=kept_index)
-    b64 = base64.b64encode(csv_file.encode()).decode()
-    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}.csv">Download {link_name}</a>'
+def _pop_download_link(df, filename, link_name, kept_index=False, file_type='csv'):
+    if isinstance(df, pd.DataFrame):
+        data_to_download = df.to_csv(index=kept_index)
+    else:
+        data_to_download = df
+    b64 = base64.b64encode(data_to_download.encode()).decode()
+    href = f'<a href="data:file/{file_type};base64,{b64}" download="{filename}.{file_type}">Download {link_name}</a>'
     st.markdown(href, unsafe_allow_html=True)
 
 

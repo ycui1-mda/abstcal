@@ -1,11 +1,10 @@
 from datetime import timedelta
 import pandas as pd
 import numpy as np
-from abstcal.calculator_data import CalculatorData
-from abstcal.tlfb_data import TLFBData
-from abstcal.visit_data import VisitData
-from abstcal.calculator_error import InputArgumentError, _show_warning
-
+from calculator_data import CalculatorData
+from tlfb_data import TLFBData
+from visit_data import VisitData
+from calculator_error import InputArgumentError, _show_warning
 
 class AbstinenceCalculator:
     def __init__(self, tlfb_data: TLFBData, visit_data: VisitData):

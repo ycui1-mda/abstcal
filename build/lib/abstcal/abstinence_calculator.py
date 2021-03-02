@@ -2,8 +2,8 @@ from datetime import timedelta
 import pandas as pd
 import numpy as np
 from abstcal.calculator_data import CalculatorData
-from abstcal.tlfb_data import TLFBData
-from abstcal.visit_data import VisitData
+from abstcal import TLFBData
+from abstcal import VisitData
 from abstcal.calculator_error import InputArgumentError, _show_warning
 
 
