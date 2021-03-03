@@ -8,7 +8,8 @@ from calculator_data import CalculatorData, DataImputationCode
 
 
 class VisitData(CalculatorData):
-    def __init__(self, filepath, data_format="long", expected_ordered_visits="infer", included_subjects="all"):
+    def __init__(self, filepath, data_format="long", expected_ordered_visits="infer", included_subjects="all",
+                 use_raw_date=True):
         """
         Create the instance object for the visit data
 
@@ -30,11 +31,13 @@ class VisitData(CalculatorData):
         :param included_subjects: Union[list, tuple], the list of subject ids that are included in the dataset,
             the default option "all" means that all subjects in the dataset will be used
 
+        :param use_raw_date: Bool, whether the raw date is used in the date column (default: True)
+
         """
         df_long = filepath if isinstance(filepath, pd.DataFrame) else super().read_data_from_path(filepath)
         if data_format == "wide":
             df_long = df_long.melt(id_vars="id", var_name="visit", value_name="date")
-        self.data = self._validated_data(df_long)
+        self.data = VisitData._validated_data(df_long, use_raw_date)
         if included_subjects != "all":
             self.data = self.data.loc[self.data["id"].isin(included_subjects), :]
         self._index_keys = ['id', 'visit']
@@ -51,23 +54,25 @@ class VisitData(CalculatorData):
         self.visits = set(self.data['visit'].unique())
         self.subject_ids = set(self.data['id'].unique())
         self.data.reset_index(drop=True, inplace=True)
+        self.use_raw_date = use_raw_date
 
     @staticmethod
-    def _validated_data(df):
+    def _validated_data(df, cast_date):
         CalculatorData._validate_columns(df, ('id', 'visit', 'date'), "visit", "id, visit, and date")
-        df['date'] = pd.to_datetime(df['date'], infer_datetime_format=True)
+        if cast_date:
+            df['date'] = pd.to_datetime(df['date'], infer_datetime_format=True)
         return df
 
     def profile_data(self, min_date_cutoff=None, max_date_cutoff=None):
         """
         Profile the visit data
 
-        :param min_date_cutoff: Union[None, datetime, str], default None
+        :param min_date_cutoff: Union[None, datetime, str, int], default None
             The minimal date allowed for the visit's date, lower than that is considered to be an outlier
             When it's set None, outlier detection won't consider the lower bound
             When it's str, it should be able to be casted to a datetime object, mm/dd/yyyy, such as '10/23/2020'
 
-        :param max_date_cutoff: Union[None, datetime, str], default None
+        :param max_date_cutoff: Union[None, datetime, str, int], default None
             The maximal amount allowed for the consumption, higher than that is considered to be an outlier
             When it's set None, outlier detection won't consider the higher bound
             When it's str, it should be able to be casted to a datetime object, such as '10/23/2020'
