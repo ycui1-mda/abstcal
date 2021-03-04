@@ -1,7 +1,13 @@
+"""
+TLFBData
+---------
+A data model for processing timeline followback data in the abstinence calculation
+"""
+
 from collections import namedtuple
 from datetime import timedelta
-from calculator_error import InputArgumentError
-from calculator_data import CalculatorData, DataImputationCode
+from abstcal.calculator_error import InputArgumentError
+from abstcal.calculator_data import CalculatorData, DataImputationCode
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -313,7 +319,7 @@ class TLFBData(CalculatorData):
 
     def _get_missing_data(self):
         self.data['diff_days'] = self.data.groupby(['id'])['date'].diff().map(
-            lambda x: x.days if pd.notnull(x) else 1)
+            lambda x: (x.days if self.use_raw_date else x) if pd.notnull(x) else 1)
         return self.data[self.data['diff_days'] > 1.0]
 
     def _impute_missing_block(self, start_record: TLFBRecord, end_record: TLFBRecord, impute, maximum_allowed_gap_days):

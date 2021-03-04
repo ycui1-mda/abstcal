@@ -1,10 +1,15 @@
+"""
+AbstinenceCalculator
+---------
+A data model for calculating abstinence data from TLFB and visit data
+"""
 from datetime import timedelta
 import pandas as pd
 import numpy as np
-from calculator_data import CalculatorData
-from tlfb_data import TLFBData
-from visit_data import VisitData
-from calculator_error import InputArgumentError, _show_warning
+from abstcal.calculator_data import CalculatorData
+from abstcal.tlfb_data import TLFBData
+from abstcal.visit_data import VisitData
+from abstcal.calculator_error import InputArgumentError, _show_warning
 
 
 class AbstinenceCalculator:
@@ -23,6 +28,10 @@ class AbstinenceCalculator:
         self.subject_ids = sorted(tlfb_data.subject_ids & visit_data.subject_ids)
 
     def check_data_availability(self):
+        """
+        Check the data availability by crossing the TLFB dataset and Visit dataset
+        :return: DataFrame
+        """
         tlfb_ids = pd.Series({subject_id: 'Yes' for subject_id in self.tlfb_data.subject_ids}, name='TLFB Data')
         visit_ids = pd.Series({subject_id: 'Yes' for subject_id in self.visit_data.subject_ids}, name='Visit Data')
         crossed_data = pd.concat([tlfb_ids, visit_ids], axis=1).fillna('No')
@@ -53,7 +62,7 @@ class AbstinenceCalculator:
         end_visits = AbstinenceCalculator._listize_args(end_visits)
         abst_names = \
             AbstinenceCalculator._infer_abst_var_names(end_visits, abst_var_names, f'{mode}_cont_v{start_visit}')
-        self.visit_data.validate_visits([start_visit, *end_visits])
+        self.visit_data._validate_visits([start_visit, *end_visits])
         if len(end_visits) != len(abst_names):
             raise InputArgumentError("The number of abstinence variable names should match the number of visits.")
 
@@ -101,7 +110,7 @@ class AbstinenceCalculator:
         if any(day < 1 for day in days):
             InputArgumentError("The number of days has to be a positive integer.")
         end_visits = AbstinenceCalculator._listize_args(end_visits)
-        self.visit_data.validate_visits(end_visits)
+        self.visit_data._validate_visits(end_visits)
 
         all_abst_names = list()
         for day in days:
@@ -166,7 +175,7 @@ class AbstinenceCalculator:
         :return: Pandas DataFrame with two columns, subject id and abstinence result
         """
         end_visits = AbstinenceCalculator._listize_args(end_visits)
-        self.visit_data.validate_visits([quit_visit, *end_visits])
+        self.visit_data._validate_visits([quit_visit, *end_visits])
 
         all_abst_names = list()
         criteria = AbstinenceCalculator._listize_args(lapse_criterion)

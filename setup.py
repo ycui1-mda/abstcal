@@ -9,7 +9,7 @@ setuptools.setup(
     author="Yong Cui",
     author_email="ycui1@mdanderson.org",
     description="Calculate abstinence using the timeline followback data in substance research.",
-    install_requires=['pandas', 'numpy', 'matplotlib', 'seaborn', 'streamlit', 'openpyxl'],
+    install_requires=['pandas', 'numpy', 'matplotlib', 'seaborn', 'streamlit', 'openpyxl', 'xlrd'],
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/ycui1-mda/abstcal",

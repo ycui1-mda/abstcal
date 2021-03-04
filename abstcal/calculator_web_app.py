@@ -1,19 +1,25 @@
 import base64
 import datetime
 import io
+import os
 import sys
 import pandas as pd
 import streamlit as st
-from calculator_web_utils import get_saved_session
-from tlfb_data import TLFBData
-from visit_data import VisitData
-from abstinence_calculator import AbstinenceCalculator
+sys.path.append(os.getcwd())
+from abstcal.calculator_web_utils import get_saved_session
+from abstcal.tlfb_data import TLFBData
+from abstcal.visit_data import VisitData
+from abstcal.abstinence_calculator import AbstinenceCalculator
+from abstcal.data_preprocessing import from_wide_to_long, mask_dates, add_additional_visit_dates
+
 
 abstcal_version = '0.7.3'
 update_date = datetime.date.today().strftime("%m/%d/%Y")
+sidebar = st.sidebar
+supported_file_types = ["csv", "xls", "xlsx"]
 
 # Hide tracebacks
-sys.tracebacklimit = 0
+# sys.tracebacklimit = 0
 session_state = get_saved_session(tlfb_data=None, visit_data=None)
 
 # Shared options
@@ -114,7 +120,21 @@ abst_options = [
 ]
 
 
+def _create_df_from_upload(file_upload):
+    uploaded_df = None
+    if file_upload is None:
+        return uploaded_df
+    uploaded_data = io.BytesIO(file_upload.getbuffer())
+    try:
+        uploaded_df = pd.read_csv(uploaded_data)
+    except:
+        uploaded_df = pd.read_excel(uploaded_data)
+    finally:
+        return uploaded_df
+
+
 def _load_elements():
+    _show_preprocessing_elements()
     st.title("Abstinence Calculator")
     _load_overview_elements()
     st.markdown("***")
@@ -125,6 +145,115 @@ def _load_elements():
     _load_cal_elements()
     st.markdown("***")
     _load_script_element()
+
+
+def _show_preprocessing_elements():
+    sidebar.header("Pre-Processing Tools")
+    _create_data_conversion_tool()
+    sidebar.markdown("***")
+    _create_date_masking_tool()
+    sidebar.markdown("***")
+    _create_additional_visit_dates()
+
+def _create_data_conversion_tool():
+    sidebar.subheader("Data Conversion (Wide to Long)")
+    sidebar.write(
+        "The calculator uses datasets in the long format. Convert your wide-formatted data to the long format."
+    )
+    conversion_tool = sidebar.beta_expander("Conversion Tool Settings", False)
+    wide_file = conversion_tool.file_uploader("Wide Formatted Data", type=supported_file_types)
+    data_source_type = conversion_tool.radio("Data Source", ["Visit", "TLFB"])
+    subject_col_name = conversion_tool.text_input("Subject ID Variable Name", "id")
+    if data_source_type == "tlfb":
+        conversion_tool.write("The resulted TLFB data will have three columns: id, date, and amount.")
+    else:
+        conversion_tool.write("The resulted Visit data will have three columns: id, visit, and date.")
+    convert_button = conversion_tool.button("Convert")
+    if convert_button:
+        if wide_file:
+            wide_df = _create_df_from_upload(wide_file)
+            long_df = from_wide_to_long(wide_df, data_source_type.lower(), subject_col_name)
+            conversion_tool.write(long_df)
+            _pop_download_link(long_df, f"wide_{data_source_type}", "Long-Formatted Data",
+                               container=conversion_tool)
+        else:
+            conversion_tool.error("Please upload your dataset first.")
+
+
+def _create_date_masking_tool():
+    sidebar.subheader("Date Masking Tool")
+    sidebar.write(
+        "Mask the dates in the Visit and TLFB data using an anchor visit or arbitrary date for all subjects"
+    )
+    masking_tool = sidebar.beta_expander("Masking Tool Settings", False)
+    masking_tool.write("Visit Data (Long Format, 3 columns: id, visit, date)")
+    visit_file = masking_tool.file_uploader("Upload Visit Data", type=supported_file_types)
+    visit_df = _create_df_from_upload(visit_file)
+    masking_tool.write("TLFB Data (Long Format, 3 columns: id, date, amount)")
+    tlfb_file = masking_tool.file_uploader("Upload TLFB Data", type=supported_file_types)
+    tlfb_df = _create_df_from_upload(tlfb_file)
+
+    masking_reference_options = ["Anchor Visit", "Arbitrary Date"]
+    masking_reference_index = masking_reference_options.index(
+        masking_tool.radio("Reference Using:", masking_reference_options)
+    )
+    if masking_reference_index == 0:
+        if visit_df is not None:
+            reference = masking_tool.selectbox("Select Visit", visit_df['visit'].unique())
+            masking_tool.write(f"Each subject will use his/her {reference}'s date to calculate day counters.")
+    else:
+        reference = masking_tool.date_input("Arbitrary Date")
+        masking_tool.write(f"All subjects will share {reference} as the reference to calculate day counters.")
+
+    if masking_tool.button("Mask Date"):
+        if visit_df is None or tlfb_df is None:
+            masking_tool.error("Please update both files to mask dates consistently.")
+        else:
+            masked_tlfb_df, masked_visit_df = mask_dates(tlfb_df, visit_df, reference, masking_reference_index == 0)
+            _pop_download_link(masked_tlfb_df, "masked_tlfb", "Masked TLFB Data",
+                               container=masking_tool)
+            _pop_download_link(masked_visit_df, "masked_visit", "Masked Visit Data",
+                               container=masking_tool)
+
+
+@st.cache(allow_output_mutation=True)
+def _get_visit_dates():
+    return pd.DataFrame(columns=["New", "Ref", "+ Days"])
+
+
+def _create_additional_visit_dates():
+    sidebar.subheader("Visit Dates Creation Tool")
+    sidebar.write(
+        "Create extra visit dates based on existing visit days"
+    )
+    visit_tool = sidebar.beta_expander("Creation Date Settings", True)
+    visit_file = visit_tool.file_uploader("Upload Visit Data", type=supported_file_types, key="visit_tool_file")
+    visit_df = _create_df_from_upload(visit_file)
+    if (visit_df is not None) and (not visit_df.empty):
+        dates_options = ["Using Actual Dates", "Using Day Counters"]
+        using_date = dates_options.index(visit_tool.radio("Specify the date column's data", dates_options)) == 0
+        new_visit_name = visit_tool.text_input("New Visit Name (Should be distinct)")
+        reference_visit = visit_tool.selectbox("Reference Visit", visit_df['visit'].unique())
+        days_to_add = visit_tool.number_input("Days to Add", value=0)
+        dates_df = _get_visit_dates()
+        if visit_tool.button("Add Row"):
+            if new_visit_name:
+                dates_df.loc[dates_df.shape[0]] = [new_visit_name, reference_visit, days_to_add]
+            else:
+                visit_tool.error("New visit name can't be empty.")
+        dates_df.drop_duplicates('New', inplace=True, ignore_index=True)
+        if not dates_df.empty:
+            to_drop = visit_tool.multiselect("Remove Unwanted Rows", dates_df.index)
+            if visit_tool.button("Drop Rows"):
+                dates_df.drop(to_drop, inplace=True)
+                dates_df.reset_index(drop=True, inplace=True)
+            visit_tool.write("Overview of The Parameters of Extra Visit Dates")
+            visit_tool.write(dates_df)
+            if visit_tool.button("Create Output Data"):
+                dates_list = list(dates_df.to_records(index=False))
+                updated_visit_df = add_additional_visit_dates(visit_df, dates_list, using_date)
+                _pop_download_link(updated_visit_df, "updated_visit", "Updated Visit Data",
+                                   container=visit_tool)
 
 
 def _load_overview_elements():
@@ -784,14 +913,14 @@ def _load_script_element():
         # _pop_download_link(calculation_script, 'calculate_abst', 'Python Script', file_type='py')
 
 
-def _pop_download_link(df, filename, link_name, kept_index=False, file_type='csv'):
+def _pop_download_link(df, filename, link_name, kept_index=False, file_type='csv', container=st):
     if isinstance(df, pd.DataFrame):
         data_to_download = df.to_csv(index=kept_index)
     else:
         data_to_download = df
     b64 = base64.b64encode(data_to_download.encode()).decode()
     href = f'<a href="data:file/{file_type};base64,{b64}" download="{filename}.{file_type}">Download {link_name}</a>'
-    st.markdown(href, unsafe_allow_html=True)
+    container.markdown(href, unsafe_allow_html=True)
 
 
 def _max_width_(width):
@@ -802,5 +931,6 @@ def _max_width_(width):
 
 
 if __name__ == "__main__":
+
     _max_width_(1200)
     _load_elements()

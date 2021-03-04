@@ -53,7 +53,7 @@ class AbstinenceCalculator:
         end_visits = AbstinenceCalculator._listize_args(end_visits)
         abst_names = \
             AbstinenceCalculator._infer_abst_var_names(end_visits, abst_var_names, f'{mode}_cont_v{start_visit}')
-        self.visit_data.validate_visits([start_visit, *end_visits])
+        self.visit_data._validate_visits([start_visit, *end_visits])
         if len(end_visits) != len(abst_names):
             raise InputArgumentError("The number of abstinence variable names should match the number of visits.")
 
@@ -101,7 +101,7 @@ class AbstinenceCalculator:
         if any(day < 1 for day in days):
             InputArgumentError("The number of days has to be a positive integer.")
         end_visits = AbstinenceCalculator._listize_args(end_visits)
-        self.visit_data.validate_visits(end_visits)
+        self.visit_data._validate_visits(end_visits)
 
         all_abst_names = list()
         for day in days:
@@ -166,7 +166,7 @@ class AbstinenceCalculator:
         :return: Pandas DataFrame with two columns, subject id and abstinence result
         """
         end_visits = AbstinenceCalculator._listize_args(end_visits)
-        self.visit_data.validate_visits([quit_visit, *end_visits])
+        self.visit_data._validate_visits([quit_visit, *end_visits])
 
         all_abst_names = list()
         criteria = AbstinenceCalculator._listize_args(lapse_criterion)
