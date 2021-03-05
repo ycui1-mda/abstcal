@@ -394,7 +394,10 @@ mean difference value.
 |Mean | mean | Reference visit’s date + The mean interval 
 |Dictionary | a dict object | Reference visit’s date + The specified days of interval
 
-Note. The reference visit is specified by the user, for which all subjects have valid dates. When it is not specified, the calculator will infer the earliest visit as the anchor visit. 
+Note. The reference visit is specified by the user, for which all subjects have valid dates. When it is not specified, the calculator will infer the earliest visit as the anchor visit.
+
+The following figure illustrates the different options for imputation.
+![Alt text](/tests/visit_imputation_example.png?raw=true "Visit Imputation Examples")
 
 
 ```python
