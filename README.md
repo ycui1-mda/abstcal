@@ -259,10 +259,13 @@ missing values.
 |Imputation Mode | Parameters | Imputed Values 
 |------------ | ------------- | -------------
 |Uniform | uniform | Q<sub>t</sub> = (Q<sub>0</sub> + Q<sub>1</sub>) / 2
-|Linear | linear | Q<sub>t</sub> = m * (t - t<sub>0</sub>) + Q<sub>0</sub> where m is (Q<sub>1</sub> - Q<sub>0</sub>) / (T<sub>1</sub> - T<sub>0</sub>)
+|Linear | linear | Q<sub>t</sub> = m * (t - t<sub>0</sub>) + Q<sub>0</sub> where m is (Q<sub>1</sub> - Q<sub>0</sub>) / (t<sub>1</sub> - t<sub>0</sub>)
 |Fixed | a numeric value | Use the numeric value to fill all missing gaps
 
 Note. Q<sub>0</sub> and Q<sub>1</sub> represent the substance use amount before (t<sub>0</sub>) and after (t<sub>1</sub>) the missing TLFB interval. Q<sub>t</sub> represents the interpolated substance use amount at the time t.
+
+The following figure shows you some examples of these different imputation modes.
+![Alt text](/tests/TLFB_imputation_example.png?raw=true "TLFB Imputation Examples")
 
 ```python
 # Use the mean
