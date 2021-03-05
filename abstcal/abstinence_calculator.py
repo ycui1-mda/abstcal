@@ -10,6 +10,7 @@ from abstcal.calculator_data import CalculatorData
 from abstcal.tlfb_data import TLFBData
 from abstcal.visit_data import VisitData
 from abstcal.calculator_error import InputArgumentError, _show_warning
+from abstcal.data_processing_utils import write_data_to_path
 
 
 class AbstinenceCalculator:
@@ -341,7 +342,7 @@ class AbstinenceCalculator:
             data_rows.append(data_row)
 
         df = pd.DataFrame(data_rows, columns=['Abstinence Name', 'Abstinent Count', 'Subject Count', 'Abstinence Rate'])
-        CalculatorData.write_data_to_path(df, filepath, True)
+        write_data_to_path(df, filepath, True)
         return df
 
     @staticmethod
@@ -357,7 +358,7 @@ class AbstinenceCalculator:
         """
         dfs = AbstinenceCalculator._listize_args(dfs)
         merged_df = pd.concat(dfs, axis=1)
-        CalculatorData.write_data_to_path(merged_df, filepath, True)
+        write_data_to_path(merged_df, filepath, True)
         return merged_df
 
     @staticmethod
@@ -373,5 +374,5 @@ class AbstinenceCalculator:
         """
         dfs = AbstinenceCalculator._listize_args(dfs)
         merged_df = pd.concat(dfs, axis=0)
-        CalculatorData.write_data_to_path(merged_df, filepath)
+        write_data_to_path(merged_df, filepath)
         return merged_df

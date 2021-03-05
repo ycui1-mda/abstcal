@@ -91,34 +91,6 @@ class CalculatorData:
         return df
 
     @staticmethod
-    def write_data_to_path(df, filepath, index=False):
-        """
-        Write data to the specified path
-
-        :param df: DataFrame
-        :param filepath: Union[str, Path, None], the path to the file to be read
-            Supported file types: comma-separated, tab-separated, and Excel spreadsheet, if None, no writing will be
-            performed
-
-        :param index: bool, whether the index of the DataFrame will be written to the output file
-
-        :return: a DataFrame
-        """
-        if filepath is None:
-            return
-
-        path = Path(filepath)
-        file_extension = path.suffix.lower()
-        if file_extension == ".csv":
-            pd.DataFrame.to_csv(df, path, index=index)
-        elif file_extension in (".xls", ".xlsx", ".xlsm", ".xlsb"):
-            pd.DataFrame.to_excel(df, path, index=index)
-        elif file_extension == ".txt":
-            pd.DataFrame.to_csv(df, path, sep='\t', index=index)
-        else:
-            raise FileExtensionError(filepath)
-
-    @staticmethod
     def _validate_columns(df, needed_cols_ordered, data_name, col_names):
         needed_cols_unordered = set(needed_cols_ordered)
         current_cols_unordered = set(df.columns)

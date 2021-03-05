@@ -106,8 +106,12 @@ id | date | amount
 It needs to be in one of the following two formats.
 **The long format.** The dataset should have three columns: __*id*__, __*visit*__, 
 and __*date*__. The id column stores the subject ids, each of which should uniquely 
-identify a study subject. The visit column stores the visits. The date column stores 
+identify a study subject. The visit column stores the visits. The date column stores
 the dates for the visits.
+
+__Note:__ The name of this visit dataset is nominal. It does not only refer to actual in-person and telephone visits, it also refer to other important milestones or timepoints (e.g., Target Quit Day) in clinical cessation trials. Thus, the visit dataset should incluse all these visits that you need to calculate abstinence. Relatedly, this package has a pre-processing tool that allows you to create "virtual" visits based on existing visits. You can find the instruction on these features at the end of this page.
+
+***
 
 id | visit | date 
 ------------ | ------------- | -------------
@@ -627,13 +631,13 @@ The `from_wide_to_long` function will return the DataFrame in the long format wi
 For privacy concerns, you may want to mask the dates in the datasets. To provide consistent mapping between all related datasets, you need to map TLFB, Visit, and Biochemical (optional) datasets altogether.
 ```python
 # Use a particular visit as reference (each subject's date for the visit will be used)
-mask_dates("path_to_tlfb.csv", "path_to_bio.csv", "path_to_visit.csv", 0)
+abstcal_utils.mask_dates("path_to_tlfb.csv", "path_to_bio.csv", "path_to_visit.csv", 0)
 
 # Use a date (mm/dd/yyyy) as reference for all subjects
-mask_dates("path_to_tlfb.csv", "path_to_bio.csv", "path_to_visit.csv", "12/29/2020")
+abstcal_utils.mask_dates("path_to_tlfb.csv", "path_to_bio.csv", "path_to_visit.csv", "12/29/2020")
 
 # If you don't have biochemical data, please specify the second parameter as None
-mask_dates("path_to_tlfb.csv", None, "path_to_visit.csv", 0)
+abstcal_utils.mask_dates("path_to_tlfb.csv", None, "path_to_visit.csv", 0)
 ```
 
 The `mask_dates` function returns the masked datasets.
@@ -641,13 +645,22 @@ The `mask_dates` function returns the masked datasets.
 #### Visit Date Creation Tool
 Sometimes, we need to create extra "virtual visit" dates that use existing visits plus a specific number of days' difference. This is possible with that `add_additional_visit_dates` function.
 ```python
-add_additional_visit_dates("path_to_visit.csv", [('TQD', 'v0', 7), ('v7', 'v8', -5)], use_raw_date=True)
+abstcal_utils.add_additional_visit_dates("path_to_visit.csv", [('TQD', 'v0', 7), ('v7', 'v8', -5)], use_raw_date=True)
 ```
 
 The above example will read the long-format visit data from the specified path and add two new visit variables. The first one will be named TQD, which is equal to each subject's v0 date plus 7 days, and the other will be named v7, which is each subject's v8 date plus -5 days. The `use_raw_date` parameter just specifies whether the visit data uses raw dates or day counters.
 
+
+#### Output DataFrame to Files
+Many of these data processing functions produce DataFrame objects as the return value. If you want to save these DataFrame objects to external files on your computer, use the `write_data_to_path` function.
+```python
+abstcal_utils.write_data_to_path(df, "filepath_to_output.csv", index=False)
+# index: when True, the output speadsheet will keep the index column, while False, it won't
+```
+
+
 ## Questions or Comments
-If you have any questions about this package, please feel free to leave comments here or
+If you have any questions about this package or would like to contribute to this project, please feel free to leave comments here or
 send me an email to ycui1@mdanderson.org.
 
 ## License

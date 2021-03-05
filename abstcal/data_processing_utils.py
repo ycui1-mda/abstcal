@@ -1,11 +1,12 @@
 
 from datetime import timedelta
+from pathlib import Path
 import pandas as pd
 import numpy as np
 from abstcal.calculator_data import CalculatorData
 from abstcal.tlfb_data import TLFBData
 from abstcal.visit_data import VisitData
-from abstcal.calculator_error import InputArgumentError
+from abstcal.calculator_error import InputArgumentError, FileExtensionError
 import matplotlib.pyplot as plt
 
 
@@ -89,6 +90,20 @@ def mask_dates(tlfb_filepath, bio_filepath, visit_filepath, reference):
 
 
 def add_additional_visit_dates(visit_filepath, visit_dates, use_raw_date):
+    """
+    Add additional visit with dates using existing visits
+
+    :param visit_filepath: Union[Path, str, DataFrame], the filepath to the visit data, or DataFrame of the visit data
+        in the long format
+
+    :param visit_dates: list[Tuple], the list of tuples, with each tuple having three items: the new visit name,
+        the reference visit, the number of days to add (if you subtract the number of days, set it to negative)
+
+    :param use_raw_date: whether the dates in the date column uses the raw dates (True), when False it means the dates
+        are day counters
+
+    :return: DataFrame
+    """
     visit_df = CalculatorData.read_data_from_path(visit_filepath)
     visit_df = VisitData._validated_data(visit_df, True)
     visit_wide = visit_df.pivot(index="id", columns="visit", values="date").reset_index()
@@ -96,6 +111,34 @@ def add_additional_visit_dates(visit_filepath, visit_dates, use_raw_date):
         visit_wide[new_visit] = visit_wide[reference_visit] + (timedelta(days=days) if use_raw_date else days)
     return visit_wide.melt(id_vars="id", var_name="visit", value_name="date")\
         .sort_values(by=['id', 'visit', 'date'], ignore_index=True)
+
+
+def write_data_to_path(df, filepath, index=False):
+    """
+    Write data to the specified path
+
+    :param df: DataFrame
+    :param filepath: Union[str, Path, None], the path to the file to be read
+        Supported file types: comma-separated, tab-separated, and Excel spreadsheet, if None, no writing will be
+        performed
+
+    :param index: bool, whether the index of the DataFrame will be written to the output file
+
+    :return: a DataFrame
+    """
+    if filepath is None:
+        return
+
+    path = Path(filepath)
+    file_extension = path.suffix.lower()
+    if file_extension == ".csv":
+        pd.DataFrame.to_csv(df, path, index=index)
+    elif file_extension in (".xls", ".xlsx", ".xlsm", ".xlsb"):
+        pd.DataFrame.to_excel(df, path, index=index)
+    elif file_extension == ".txt":
+        pd.DataFrame.to_csv(df, path, sep='\t', index=index)
+    else:
+        raise FileExtensionError(filepath)
 
 
 show_figure = plt.show
