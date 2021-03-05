@@ -269,7 +269,7 @@ missing values.
 Note. Q<sub>0</sub> and Q<sub>1</sub> represent the substance use amount before (t<sub>0</sub>) and after (t<sub>1</sub>) the missing TLFB interval. Q<sub>t</sub> represents the interpolated substance use amount at the time t.
 
 The following figure shows you some examples of these different imputation modes.
-![Alt text](/tests/TLFB_imputation_example.png?raw=true "TLFB Imputation Examples")
+![Alt text](/tests/TLFB_imputation_examples.png?raw=true "TLFB Imputation Examples")
 
 ```python
 # Use the mean
@@ -397,7 +397,7 @@ mean difference value.
 Note. The reference visit is specified by the user, for which all subjects have valid dates. When it is not specified, the calculator will infer the earliest visit as the anchor visit.
 
 The following figure illustrates the different options for imputation. For the sake of a better illustration, the tables use the wide format of the visit data. You don't need to transform you visit data, and everything will be handled under the hood for you.
-![Alt text](/tests/visit_imputation_example.png?raw=true "Visit Imputation Examples")
+![Alt text](/tests/visit_imputation_examples.png?raw=true "Visit Imputation Examples")
 
 
 ```python
