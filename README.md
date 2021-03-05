@@ -109,7 +109,7 @@ and __*date*__. The id column stores the subject ids, each of which should uniqu
 identify a study subject. The visit column stores the visits. The date column stores
 the dates for the visits.
 
-__Note:__ The name of this visit dataset is nominal. It does not only refer to actual in-person and telephone visits, it also refer to other important milestones or timepoints (e.g., Target Quit Day) in clinical cessation trials. Thus, the visit dataset should incluse all these visits that you need to calculate abstinence. Relatedly, this package has a pre-processing tool that allows you to create "virtual" visits based on existing visits. You can find the instruction on these features at the end of this page.
+__Note:__ The name of this visit dataset is nominal. It does not only refer to actual in-person and telephone visits, it also refers to other important milestones or timepoints (e.g., Target Quit Day) in clinical cessation trials. Thus, the visit dataset should incluse all these visits that you need to calculate abstinence. Relatedly, this package has a pre-processing tool that allows you to create "virtual" visits based on existing visits. You can find the instruction on this feature at the end of this page.
 
 ***
 
