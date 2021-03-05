@@ -38,7 +38,7 @@ class VisitData(CalculatorData):
         :param use_raw_date: Bool, whether the raw date is used in the date column (default: True)
 
         """
-        df_long = filepath if isinstance(filepath, pd.DataFrame) else super().read_data_from_path(filepath)
+        df_long = super().read_data_from_path(filepath)
         if data_format == "wide":
             df_long = df_long.melt(id_vars="id", var_name="visit", value_name="date")
         self.data = VisitData._validated_data(df_long, use_raw_date)
@@ -87,9 +87,9 @@ class VisitData(CalculatorData):
             else min_date_cutoff
         casted_max_date_cutoff = pd.to_datetime(max_date_cutoff, infer_datetime_format=True) if self.use_raw_date \
             else max_date_cutoff
-        visit_summary_series = self._get_visit_sample_summary(casted_min_date_cutoff, casted_max_date_cutoff)
+        visit_summary_series, grid = self._get_visit_sample_summary(casted_min_date_cutoff, casted_max_date_cutoff)
         visit_subject_summary = self._get_visit_subject_summary(casted_min_date_cutoff, casted_max_date_cutoff)
-        return visit_summary_series, visit_subject_summary
+        return visit_summary_series, visit_subject_summary, grid
 
     def get_out_of_order_visit_data(self):
         """
@@ -140,7 +140,6 @@ class VisitData(CalculatorData):
 
         grid = sns.FacetGrid(self._visit_data.loc[self._visit_data['visit'] != anchor_visit, :], col="visit")
         grid.map(plt.hist, "interval_to_anchor")
-        plt.show()
 
         for visit in self.visits - {anchor_visit}:
             visit_dates = self._visit_data.dropna().loc[self._visit_data['visit'] == visit, :].\
@@ -159,7 +158,7 @@ class VisitData(CalculatorData):
             f"visit_{visit}_attendance": f"{count} ({count / subject_count:.2%})"
             for visit, count in visit_record_counts.items()
         })
-        return pd.Series(visit_summary)
+        return pd.Series(visit_summary), grid
 
     def get_retention_rates(self, filepath=None):
         _data = self.data

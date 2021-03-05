@@ -10,7 +10,6 @@ from abstcal.calculator_error import InputArgumentError
 from abstcal.calculator_data import CalculatorData, DataImputationCode
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import seaborn as sns
 
 TLFBRecord = namedtuple("TLFBRecord", "id date amount imputation_code")
@@ -31,7 +30,7 @@ class TLFBData(CalculatorData):
         :param use_raw_date: Bool, whether the raw date is used in the date column (default: True)
 
         """
-        df = filepath if isinstance(filepath, pd.DataFrame) else super().read_data_from_path(filepath)
+        df = super().read_data_from_path(filepath)
         self.data = TLFBData._validated_data(df, use_raw_date)
         if included_subjects and included_subjects != "all":
             self.data = self.data.loc[self.data["id"].isin(included_subjects), :].reset_index(drop=True)
@@ -66,9 +65,8 @@ class TLFBData(CalculatorData):
         """
         tlfb_summary_series = self._get_tlfb_sample_summary(min_amount_cutoff, max_amount_cutoff)
         tlfb_subject_summary = self._get_tlfb_subject_summary(min_amount_cutoff, max_amount_cutoff)
-        sns.displot(self.data['amount'])
-        plt.show()
-        return tlfb_summary_series, tlfb_subject_summary
+        grid = sns.displot(self.data['amount'])
+        return tlfb_summary_series, tlfb_subject_summary, grid
 
     def _get_tlfb_sample_summary(self, min_amount_cutoff, max_amount_cutoff):
         record_count = self.data.shape[0]
@@ -221,7 +219,7 @@ class TLFBData(CalculatorData):
             before and after the missing interval
             Numeric value (int or float): impute the missing TLFB data using the specified value
 
-        :param last_record_action: Union[int, float, "ffill"]
+        :param last_record_action: Union[int, float, "ffill", None]
             to interpolate one more record from the last record (presumably the day before the last visit), this action
             is useful when you compute abstinence data involving the last visit, which may have missing data on the TLFB
             data.

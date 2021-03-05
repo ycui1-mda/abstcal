@@ -70,11 +70,14 @@ class CalculatorData:
         """
         Read data from the specified path
 
-        :param filepath: Union[str, Path, BytesIO], the path to the file to be read
+        :param filepath: Union[str, Path, DataFrame], the path to the file to be read
             Supported file types: comma-separated, tab-separated, and Excel spreadsheet
 
         :return: a DataFrame
         """
+        if isinstance(filepath, pd.DataFrame):
+            return filepath
+
         path = Path(filepath)
         file_extension = path.suffix.lower()
         if file_extension == ".csv":

@@ -31,7 +31,7 @@ class VisitData(CalculatorData):
             the default option "all" means that all subjects in the dataset will be used
 
         """
-        df_long = filepath if isinstance(filepath, pd.DataFrame) else super().read_data_from_path(filepath)
+        df_long = super().read_data_from_path(filepath)
         if data_format == "wide":
             df_long = df_long.melt(id_vars="id", var_name="visit", value_name="date")
         self.data = self._validated_data(df_long)

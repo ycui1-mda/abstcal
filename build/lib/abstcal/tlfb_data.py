@@ -24,7 +24,7 @@ class TLFBData(CalculatorData):
             the default option "all" means that all subjects in the dataset will be used
 
         """
-        df = filepath if isinstance(filepath, pd.DataFrame) else super().read_data_from_path(filepath)
+        df = super().read_data_from_path(filepath)
         self.data = self._validated_data(df)
         if included_subjects and included_subjects != "all":
             self.data = self.data.loc[self.data["id"].isin(included_subjects), :].reset_index(drop=True)

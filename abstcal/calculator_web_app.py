@@ -10,7 +10,7 @@ from abstcal.calculator_web_utils import get_saved_session
 from abstcal.tlfb_data import TLFBData
 from abstcal.visit_data import VisitData
 from abstcal.abstinence_calculator import AbstinenceCalculator
-from abstcal.data_preprocessing import from_wide_to_long, mask_dates, add_additional_visit_dates
+from abstcal.data_processing_utils import from_wide_to_long, mask_dates, add_additional_visit_dates
 
 
 abstcal_version = '0.7.3'
@@ -193,6 +193,10 @@ def _create_date_masking_tool():
     tlfb_file = masking_tool.file_uploader("Upload TLFB Data", type=supported_file_types)
     tlfb_df = _create_df_from_upload(tlfb_file)
 
+    masking_tool.write("Optional Biochemical Data (Long Format, 3 columns: id, date, amount)")
+    bio_file = masking_tool.file_uploader("Upload Bio Data", type=supported_file_types)
+    bio_df = _create_df_from_upload(bio_file)
+
     masking_reference_options = ["Anchor Visit", "Arbitrary Date"]
     masking_reference_index = masking_reference_options.index(
         masking_tool.radio("Reference Using:", masking_reference_options)
@@ -209,9 +213,13 @@ def _create_date_masking_tool():
         if visit_df is None or tlfb_df is None:
             masking_tool.error("Please update both files to mask dates consistently.")
         else:
-            masked_tlfb_df, masked_visit_df = mask_dates(tlfb_df, visit_df, reference, masking_reference_index == 0)
+            masked_tlfb_df, *masked_bio_df, masked_visit_df = \
+                mask_dates(tlfb_df, bio_df, visit_df, reference)
             _pop_download_link(masked_tlfb_df, "masked_tlfb", "Masked TLFB Data",
                                container=masking_tool)
+            if masked_bio_df:
+                _pop_download_link(masked_tlfb_df[0], "masked_bio", "Masked Bio Data",
+                                   container=masking_tool)
             _pop_download_link(masked_visit_df, "masked_visit", "Masked Visit Data",
                                container=masking_tool)
 
@@ -761,10 +769,11 @@ def _process_visit_data():
 
 def _load_data_summary(data, data_params):
     st.subheader("Data Overview")
-    data_all_summary, data_subject_summary = \
+    data_all_summary, data_subject_summary, grid = \
         data.profile_data(data_params["allowed_min"], data_params["allowed_max"])
     st.write(data_all_summary)
     st.write(data_subject_summary)
+    st.pyplot(grid)
 
     na_number = data.drop_na_records()
     st.write(f"Removed Records With N/A Values Count: {na_number}")
