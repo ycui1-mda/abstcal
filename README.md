@@ -396,7 +396,7 @@ mean difference value.
 
 Note. The reference visit is specified by the user, for which all subjects have valid dates. When it is not specified, the calculator will infer the earliest visit as the anchor visit.
 
-The following figure illustrates the different options for imputation.
+The following figure illustrates the different options for imputation. For the sake of a better illustration, the tables use the wide format of the visit data. You don't need to transform you visit data, and everything will be handled under the hood for you.
 ![Alt text](/tests/visit_imputation_example.png?raw=true "Visit Imputation Examples")
 
 
