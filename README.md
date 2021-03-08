@@ -109,8 +109,6 @@ and __*date*__. The id column stores the subject ids, each of which should uniqu
 identify a study subject. The visit column stores the visits. The date column stores
 the dates for the visits.
 
-__Note:__ The name of this visit dataset is nominal. It does not only refer to actual in-person and telephone visits, it also refers to other important milestones or timepoints (e.g., Target Quit Day) in clinical cessation trials. Thus, the visit dataset should incluse all these visits that you need to calculate abstinence. Relatedly, this package has a pre-processing tool that allows you to create "virtual" visits based on existing visits. You can find the instruction on this feature at the end of this page.
-
 ***
 
 id | visit | date 
@@ -310,6 +308,8 @@ visit_data = VisitData("file_path.csv", "wide")
 # Read the visit data and specify the order of the visit
 visit_data = VisitData("file_path.csv", expected_ordered_visits=[1, 2, 3, 5, 6])
 ```
+
+__Note:__ The name of this visit dataset is nominal. It does not only refer to actual in-person and telephone visits, it also refers to other important milestones or timepoints (e.g., Target Quit Day) in clinical cessation trials. Thus, the visit dataset should incluse all these visits that you need to calculate abstinence. Relatedly, this package has a pre-processing tool that allows you to create "virtual" visits based on existing visits. You can find the instruction on this feature at the end of this page.
 
 If you prefer referring to the visit data as time points or milestones, you can do so by creating the visit dataset as following:
 ```python
