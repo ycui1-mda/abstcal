@@ -311,6 +311,15 @@ visit_data = VisitData("file_path.csv", "wide")
 visit_data = VisitData("file_path.csv", expected_ordered_visits=[1, 2, 3, 5, 6])
 ```
 
+If you prefer referring to the visit data as time points or milestones, you can do so by creating the visit dataset as following:
+```python
+# If you prefer using time points
+timepoint_data = TimePointData("file_path.csv")
+
+# If you prefer using milestones
+milestone_data = MilestoneData("file_path.csv")
+```
+
 __Note:__ If the date column uses the day counters, you'll have to set the `use_raw_date` to `False`, just as processing the TLFB data.
 ```python
 # When the dates are day counters

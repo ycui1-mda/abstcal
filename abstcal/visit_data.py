@@ -397,3 +397,7 @@ class VisitData(CalculatorData):
         if increment_days:
             dates = [date + (timedelta(days=increment_days) if self.use_raw_date else increment_days) for date in dates]
         return dates
+
+
+# Aliases for different preferences
+TimePointData = MilestoneData = VisitData
