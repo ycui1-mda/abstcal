@@ -66,6 +66,7 @@ tlfb_imputation_options = list(tlfb_imputation_options_mapped)
 visit_data_params = dict.fromkeys([
     "data",
     "data_format",
+    "use_raw_date",
     "expected_visits",
     "subjects",
     "duplicate_mode",
@@ -321,35 +322,67 @@ def _generate_calculation_script():
     script_lines.append("from abstcal import TLFBData, VisitData, AbstinenceCalculator")
     needed_tlfb_data_params = tlfb_data_params.copy()
     del needed_tlfb_data_params['data']
-    script_lines.append(f'tlfb_data_params = {needed_tlfb_data_params}')
-    script_lines.append('tlfb_source = "Please specify the file path"')
-    script_lines.append("""tlfb_data = TLFBData(
-        tlfb_source,
-        tlfb_data_params["cutoff"],
-        tlfb_data_params["subjects"]
-    )""")
+    script_lines.append(f'# The parameters for processing the TLFB data\ntlfb_data_params = {needed_tlfb_data_params}')
+    script_lines.append('# The path to the TLFB data on your computer\n'
+                        'tlfb_source = "Please specify the file path to the TLFB data"')
+    script_lines.append("""# Create the TLFBData instance\ntlfb_data = TLFBData(
+    tlfb_source,
+    tlfb_data_params["cutoff"],
+    tlfb_data_params["subjects"],
+    tlfb_data_params["use_raw_date"]
+)""")
     if tlfb_data_params["imputation_mode"] is not None:
-        script_lines.append("""imputation_params = [
-            tlfb_data_params["imputation_mode"],
-            tlfb_data_params["imputation_last_record"],
-            tlfb_data_params["imputation_gap_limit"]
-        ]""")
+        script_lines.append("""# Impute the TLFB data\nimputation_params = [
+    tlfb_data_params["imputation_mode"],
+    tlfb_data_params["imputation_last_record"],
+    tlfb_data_params["imputation_gap_limit"]
+]""")
         if bio_data_params["data"] is not None:
-            script_lines.append("""biochemical_data = TLFBData(
-                bio_data_params["data"],
-                bio_data_params["cutoff"]
-            )""")
+            script_lines.append("""# Use biochemical data\nbiochemical_data = TLFBData(
+    bio_data_params["data"],
+    bio_data_params["cutoff"]
+)""")
             if bio_data_params["enable_interpolation"]:
-                script_lines.append("""biochemical_data.interpolate_biochemical_data(
-                    bio_data_params["half_life"],
-                    bio_data_params["days_interpolation"]
-                )""")
-            script_lines.append("""biochemical_data.drop_na_records()
-            biochemical_data.check_duplicates()
-            imputation_params.extend((biochemical_data, str(bio_data_params["overridden_amount"])))
-            """)
+                script_lines.append("""# Interpolate biochemical data\nbiochemical_data.interpolate_biochemical_data(
+    bio_data_params["half_life"],
+    bio_data_params["days_interpolation"]
+)""")
+            script_lines.append("# Clean up biochemical\nbiochemical_data.drop_na_records()\n"
+                                "biochemical_data.check_duplicates()")
+            script_lines.append("# Apply the biochemical data to TLFB data preps\n"
+                                "imputation_params.extend((biochemical_data, "
+                                "str(bio_data_params['overridden_amount'])))")
         script_lines.append("tlfb_data.impute_data(*imputation_params)")
 
+    script_lines.append("# Drop any records with missing data\ntlfb_data.drop_na_records()\n\n# Remove any duplicates\n"
+                        "tlfb_data.check_duplicates(tlfb_data_params['duplicate_mode'])")
+    script_lines.append("# Recode any outliers\n"
+                        "tlfb_data.recode_outliers(tlfb_data_params['allowed_min'], tlfb_data_params['allowed_min'],"
+                        "tlfb_data_params['outliers_mode'])")
+    needed_visit_data_params = visit_data_params.copy()
+    del needed_visit_data_params['data']
+    if not needed_visit_data_params['expected_visits']:
+        needed_visit_data_params['expected_visits'] = 'infer'
+    script_lines.append(f'# The parameters for processing the visit data, you need to update some of them\n'
+                        f'visit_data_params = {needed_visit_data_params}')
+    script_lines.append('# The path to the visit data on your computer\n'
+                        'visit_source = "Please specify the file path to the visit data"')
+    script_lines.append("""# Create the VisitData instance\nvisit_data = VisitData(
+    visit_source,
+    visit_data_params["data_format"],
+    visit_data_params["expected_visits"],
+    visit_data_params["subjects"],
+    visit_data_params["use_raw_date"]
+)""")
+    script_lines.append("# Profile the data\n"
+                        "visit_data.profile(visit_data_params['allowed_min'], visit_data_params['allowed_max'])")
+    script_lines.append("# Remove any duplicates\n"
+                        "visit_data.check_duplicates(visit_data_params['duplicate_mode'])")
+    script_lines.append("# Recode any outliers\n"
+                        "visit_data.recode_outliers(visit_data_params['allowed_min'], visit_data_params['allowed_min'],"
+                        "visit_data_params['outliers_mode'])")
+    script_lines.append("visit_data.impute_data(visit_data_params['imputation_mode'], "
+                        "anchor_visit=visit_data_params['anchor_visit'])")
     generated_script = '\n\n'.join(script_lines)
     return generated_script
 
@@ -386,11 +419,11 @@ def _load_tlfb_elements():
     with st.beta_expander("TLFB Data Processing Advanced Configurations"):
         st.write("1. The TLFB data's date column can use either actual dates or arbitrary day counters. Please specify "
                  "the date data type.")
-        tlfb_data_params["use_raw_dates"] = st.checkbox(
+        tlfb_data_params["use_raw_date"] = st.checkbox(
             "Raw dates are used.",
             value=True
         )
-        if tlfb_data_params["use_raw_dates"]:
+        if tlfb_data_params["use_raw_date"]:
             st.write("The TLFB dataset uses the actual dates.")
         else:
             st.write("The TLFB dataset uses arbitrary day counters.")
@@ -501,15 +534,7 @@ def _load_tlfb_elements():
                 step=None,
                 value=100.0
             )
-        if selected_outlier_mode == outlier_options[0]:
-            st.write("Any potential outliers won't be examined.")
-        elif selected_outlier_mode == outlier_options[1]:
-            st.write(f'Outliers will be removed if they are smaller than {tlfb_data_params["allowed_min"]} or '
-                     f'greater than {tlfb_data_params["allowed_max"]}')
-        else:
-            st.write(f'Outliers will be set to the boundary values if they are smaller than '
-                     f'{tlfb_data_params["allowed_min"]} or greater than {tlfb_data_params["allowed_max"]}')
-        st.markdown("***")
+        _show_outlier_action_summary(tlfb_data_params, selected_outlier_mode)
 
         st.write("7. Biochemical Data for Abstinence Verification (Optional)")
         has_bio_data = st.checkbox("Integrate Biochemical Data For Abstinence Calculation")
@@ -679,13 +704,32 @@ def _load_visit_elements():
         container.write("The Visit data are shown here after loading.")
 
     with st.beta_expander("Visit Data Processing Advanced Configurations"):
-        st.write("1. Specify the expected order of the visits (for data normality check)")
+        st.write("1. The TLFB data's date column can use either actual dates or arbitrary day counters. "
+                 "Please specify the date data type.")
+        visit_data_params['use_raw_date'] = st.checkbox(
+            "Raw dates are used",
+            True,
+            key="visit_data_date_col"
+        )
+        if visit_data_params["use_raw_date"]:
+            st.write("The visit dataset uses the actual dates.")
+        else:
+            st.write("The visit dataset uses arbitrary day counters.")
+        st.markdown("***")
+
+        st.write("2. Specify the expected order of the visits (for data normality check)")
         visit_data_params['expected_visits'] = st.multiselect(
             "Please adjust the order accordingly",
             visits,
             default=visits
         )
-        st.write("2. Subjects used in the abstinence calculation.")
+        if visit_data_params["expected_visits"]:
+            st.write(f'The expected order for visits: {visit_data_params["expected_visits"]}')
+        else:
+            st.write("The expected order for visits will be inferred from the numeric/alphabetic values.")
+        st.markdown("***")
+
+        st.write("3. Subjects used in the abstinence calculation.")
         use_all_subjects = st.checkbox(
             "Use all subjects in the Visit data",
             value=True
@@ -698,32 +742,49 @@ def _load_visit_elements():
                 visit_subjects,
                 default=visit_subjects
             )
-        st.write("3. Visit Missing Dates Imputation")
-        visit_data_params["imputation_mode"] = visit_imputation_options_mapped[st.selectbox(
+        st.write(f"Subjects used in the calculation: {visit_data_params['subjects']}")
+        st.markdown("***")
+
+        st.write("4. Visit Missing Dates Imputation")
+        imputation_summary = dict()
+        selected_imputation_mode = st.selectbox(
             "Select your option",
             visit_imputation_options,
             index=1,
             key="visit_imputation_mode"
-        )]
+        )
+        imputation_summary['Imputation Mode'] = selected_imputation_mode
+        visit_data_params["imputation_mode"] = visit_imputation_options_mapped[selected_imputation_mode]
+        st.write(f"Visit Data Imputation: ")
         if visit_data_params["imputation_mode"] is not None:
             visit_data_params["anchor_visit"] = st.selectbox(
                 "Anchor Visit for Imputation",
                 visit_data_params['expected_visits'],
                 index=0
             )
-        st.write("4. Visit Duplicate Records Action")
-        visit_data_params["duplicate_mode"] = duplicate_options_mapped[st.selectbox(
+            imputation_summary['Anchor Visit'] = visit_data_params["anchor_visit"]
+        imputation_summary_text = '\n\n* '.join([f'{key}: {value}' for key, value in imputation_summary.items()])
+        st.markdown(f"_Summary of the Imputation Parameters_\n\n* {imputation_summary_text}")
+        st.markdown("***")
+
+        st.write("5. Visit Duplicate Records Action")
+        selected_duplicate_mode = st.selectbox(
             "Select your option",
             duplicate_options,
             index=len(duplicate_options) - 2,
             key="visit_duplicate_mode"
-        )]
-        st.write("5. Visit Outliers Action (outliers are those lower than the min or higher than the max)")
-        visit_data_params["outliers_mode"] = outlier_options_mapped[st.selectbox(
+        )
+        visit_data_params["duplicate_mode"] = duplicate_options_mapped[selected_duplicate_mode]
+        st.write(f"Duplicate Records: {selected_duplicate_mode}")
+        st.markdown("***")
+
+        st.write("6. Visit Outliers Action (outliers are those lower than the min or higher than the max)")
+        selected_outlier_mode = st.selectbox(
             "Select your option",
             outlier_options,
             key="visit_outliers_mode"
-        )]
+        )
+        visit_data_params["outliers_mode"] = outlier_options_mapped[selected_outlier_mode]
         if visit_data_params["outliers_mode"] is not None:
             left_col, right_col = st.beta_columns(2)
             visit_data_params["allowed_min"] = left_col.date_input(
@@ -734,11 +795,24 @@ def _load_visit_elements():
                 "Allowed Maximal Visit Date",
                 value=None
             )
+        _show_outlier_action_summary(visit_data_params, selected_outlier_mode)
 
     processed_data = st.button("Get/Refresh Visit Data Summary")
 
     if processed_data or session_state.visit_data is not None:
         _process_visit_data()
+
+
+def _show_outlier_action_summary(data_params, selected_outlier_mode):
+    if selected_outlier_mode == outlier_options[0]:
+        st.write("Any potential outliers won't be examined.")
+    elif selected_outlier_mode == outlier_options[1]:
+        st.write(f'Outliers will be removed if they are smaller than {visit_data_params["allowed_min"]} or '
+                 f'greater than {visit_data_params["allowed_max"]}')
+    else:
+        st.write(f'Outliers will be set to the boundary values if they are smaller than '
+                 f'{visit_data_params["allowed_min"]} or greater than {visit_data_params["allowed_max"]}')
+    st.markdown("***")
 
 
 def _process_visit_data():
@@ -916,11 +990,12 @@ def _calculate_abstinence():
 def _load_script_element():
     st.subheader("Python Script Generation")
     st.markdown("To automatize data processing, you can generate a Python script based on the input.")
-    if st.button("Generate Python Script"):
-        calculation_script = _generate_calculation_script()
-        st.write(calculation_script)
+    # if st.button("Generate Python Script"):
+    #     calculation_script = _generate_calculation_script()
+    #     st.code(calculation_script)
         # _pop_download_link(calculation_script, 'calculate_abst', 'Python Script', file_type='py')
-
+    calculation_script = _generate_calculation_script()
+    st.code(calculation_script)
 
 def _pop_download_link(df, filename, link_name, kept_index=False, file_type='csv', container=st):
     if isinstance(df, pd.DataFrame):

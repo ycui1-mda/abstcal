@@ -277,7 +277,7 @@ class VisitData(CalculatorData):
         return recode_summary
 
     # noinspection PyTypeChecker
-    def impute_data(self, anchor_visit='infer', impute='freq'):
+    def impute_data(self, impute='freq', anchor_visit='infer'):
         """
         Impute any missing visit data.
 
@@ -310,7 +310,7 @@ class VisitData(CalculatorData):
             self.data = self.data[self.data['imputation_code'] == 0]
 
         self.data = self.data.sort_values(by=self._index_keys, ignore_index=True)
-        if anchor_visit == 'infer':
+        if anchor_visit == 'infer' or anchor_visit is None:
             min_date_indices = self.data.groupby(['id'])['date'].idxmin()
             anchor_visit = self.data.loc[min_date_indices, 'visit'].value_counts().idxmax()
 
