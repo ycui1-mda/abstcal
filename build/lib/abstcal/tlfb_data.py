@@ -1,45 +1,47 @@
+"""
+TLFBData
+---------
+A data model for processing timeline followback data in the abstinence calculation
+"""
+
 from collections import namedtuple
 from datetime import timedelta
 from abstcal.calculator_error import InputArgumentError
 from abstcal.calculator_data import CalculatorData, DataImputationCode
+from abstcal.abstcal_utils import read_data_from_path
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import seaborn as sns
 
 TLFBRecord = namedtuple("TLFBRecord", "id date amount imputation_code")
 
 
 class TLFBData(CalculatorData):
-    def __init__(self, filepath, abst_cutoff=0, included_subjects="all"):
+    _index_keys = ['id', 'date']
+    _value_key = 'amount'
+
+    def __init__(self, filepath, abst_cutoff=0, included_subjects="all", use_raw_date=True):
         """
         Create the instance object for the TLFB data
 
         :param filepath: Union[str, path, DataFrame], the file path to the TLFB data or the created DataFrame
-
 
         :param abst_cutoff: Union[float, int], the cutoff equal to or below which is abstinent
 
         :param included_subjects: Union[list, tuple], the list of subject ids that are included in the dataset,
             the default option "all" means that all subjects in the dataset will be used
 
+        :param use_raw_date: Bool, whether the raw date is used in the date column (default: True)
+
         """
-        df = super().read_data_from_path(filepath)
-        self.data = self._validated_data(df)
+        self.use_raw_date = use_raw_date
+        df = read_data_from_path(filepath)
+        self.data = self.validate_data(df)
         if included_subjects and included_subjects != "all":
             self.data = self.data.loc[self.data["id"].isin(included_subjects), :].reset_index(drop=True)
 
-        self._index_keys = ['id', 'date']
-        self._value_key = 'amount'
         self.subject_ids = set(self.data['id'].unique())
         self.abst_cutoff = abst_cutoff
-
-    @staticmethod
-    def _validated_data(df):
-        CalculatorData._validate_columns(df, ('id', 'date', 'amount'), "TLFB", "id, date, and amount")
-        df['date'] = pd.to_datetime(df['date'], infer_datetime_format=True)
-        df['amount'] = df['amount'].astype(float)
-        return df
 
     def profile_data(self, min_amount_cutoff=None, max_amount_cutoff=None):
         """
@@ -57,9 +59,8 @@ class TLFBData(CalculatorData):
         """
         tlfb_summary_series = self._get_tlfb_sample_summary(min_amount_cutoff, max_amount_cutoff)
         tlfb_subject_summary = self._get_tlfb_subject_summary(min_amount_cutoff, max_amount_cutoff)
-        sns.displot(self.data['amount'])
-        plt.show()
-        return tlfb_summary_series, tlfb_subject_summary
+        grid = sns.displot(self.data['amount'])
+        return tlfb_summary_series, tlfb_subject_summary, grid
 
     def _get_tlfb_sample_summary(self, min_amount_cutoff, max_amount_cutoff):
         record_count = self.data.shape[0]
@@ -91,7 +92,7 @@ class TLFBData(CalculatorData):
         columns = [self.data['id'].isna(),
                    self.data['date'].isna(),
                    self.data['amount'].isna(),
-                   self.data.duplicated(['id', 'date'], keep=False)]
+                   self.data.duplicated(self._index_keys, keep=False)]
         if min_amount_cutoff is not None:
             count_key_names.append('outlier_amount_low_count')
             columns.append(pd.Series(self.data['amount'] < min_amount_cutoff))
@@ -110,7 +111,7 @@ class TLFBData(CalculatorData):
         summary_dfs = [tlfb_dates_amounts]
         col_names = ['record_count', 'date_min', 'date_max', 'amount_min', 'amount_max',
                      'amount_mean', 'duplicates_count']
-        summary_dfs.append(self.data.loc[self.data.duplicated(['id', 'date'], keep=False), :].groupby(
+        summary_dfs.append(self.data.loc[self.data.duplicated(self._index_keys, keep=False), :].groupby(
             'id')['amount'].agg('count'))
         if min_amount_cutoff is not None:
             summary_dfs.append(self.data.loc[self.data['amount'] < min_amount_cutoff, :].groupby(
@@ -164,7 +165,7 @@ class TLFBData(CalculatorData):
                     interpolated_dates.add(interpolated_date)
                     interpolated_records.append(interpolated_record)
 
-        interpolated_df = pd.DataFrame(interpolated_records, columns=['id', 'date', 'amount', 'imputation_code'])
+        interpolated_df = pd.DataFrame(interpolated_records, columns=[*self._index_keys, 'amount', 'imputation_code'])
         self.data = pd.concat([self.data, interpolated_df]).sort_values(by=self._index_keys, ignore_index=True)
         return len(interpolated_df)
 
@@ -176,11 +177,9 @@ class TLFBData(CalculatorData):
             Drop records when their values are lower than the floor amount if drop_outliers is True (the default),
             otherwise outliers will be replaced with the floor amount (i.e., drop_outliers=False)
 
-
         :param ceil_amount: Union[int, float]
             Drop records when their values are higher than the ceil amount if drop_outliers is True (the default),
             otherwise outliers will be replaced with the ceil amount (i.e., drop_outliers=False)
-
 
         :param drop_outliers: bool, default is True
             Drop outliers when it's True and recode outliers to bounding values when it's False
@@ -214,7 +213,7 @@ class TLFBData(CalculatorData):
             before and after the missing interval
             Numeric value (int or float): impute the missing TLFB data using the specified value
 
-        :param last_record_action: Union[int, float, "ffill"]
+        :param last_record_action: Union[int, float, "ffill", None]
             to interpolate one more record from the last record (presumably the day before the last visit), this action
             is useful when you compute abstinence data involving the last visit, which may have missing data on the TLFB
             data.
@@ -270,7 +269,7 @@ class TLFBData(CalculatorData):
             else:
                 _biochemical_data = \
                     biochemical_data.data.rename(columns={"amount": "bio_amount"})
-            _merged = self.data.merge(_biochemical_data, how="left", on=["id", "date"])
+            _merged = self.data.merge(_biochemical_data, how="left", on=self._index_keys)
             bio_amount = (self.abst_cutoff + 1) if overridden_amount == 'infer' else float(overridden_amount)
 
             def interpolate_tlfb(row):
@@ -287,7 +286,7 @@ class TLFBData(CalculatorData):
             self.data = _merged.drop(columns="bio_amount")
 
         self.data['diff_days'] = self.data.groupby(['id'])['date'].diff().map(
-            lambda x: x.days if pd.notnull(x) else 1)
+            lambda x: (x.days if self.use_raw_date else x) if pd.notnull(x) else 1)
         missing_data = self.data[self.data['diff_days'] > 1.0]
         imputed_records = []
         for data_row in missing_data.itertuples():
@@ -312,36 +311,36 @@ class TLFBData(CalculatorData):
 
     def _get_missing_data(self):
         self.data['diff_days'] = self.data.groupby(['id'])['date'].diff().map(
-            lambda x: x.days if pd.notnull(x) else 1)
+            lambda x: (x.days if self.use_raw_date else x) if pd.notnull(x) else 1)
         return self.data[self.data['diff_days'] > 1.0]
 
     def _impute_missing_block(self, start_record: TLFBRecord, end_record: TLFBRecord, impute, maximum_allowed_gap_days):
         subject_id, start_date, start_amount, _ = start_record
         subject_id, end_date, end_amount, _ = end_record
         imputation_code = DataImputationCode.IMPUTED.value
-        day_number = (end_date - start_date).days
+        day_number = (end_date - start_date).days if self.use_raw_date else (end_date - start_date)
         imputed_records = []
         if not maximum_allowed_gap_days and day_number > maximum_allowed_gap_days:
             for i in range(1, day_number):
-                imputed_date = start_date + timedelta(days=i)
+                imputed_date = start_date + (timedelta(days=i) if self.use_raw_date else i)
                 imputed_records.append(TLFBRecord(subject_id, imputed_date, self.abst_cutoff + 1, imputation_code))
             return imputed_records
 
         if impute == "linear":
             m = (end_amount - start_amount) / day_number
             for i in range(1, day_number):
-                imputed_date = start_date + timedelta(days=i)
+                imputed_date = start_date + (timedelta(days=i) if self.use_raw_date else i)
                 imputed_amount = m * i + start_amount
                 imputed_records.append(TLFBRecord(subject_id, imputed_date, imputed_amount, imputation_code))
         elif impute == "uniform":
             imputed_amount = np.mean([start_amount, end_amount])
             for i in range(1, day_number):
-                imputed_date = start_date + timedelta(days=i)
+                imputed_date = start_date + (timedelta(days=i) if self.use_raw_date else i)
                 imputed_records.append(TLFBRecord(subject_id, imputed_date, imputed_amount, imputation_code))
         else:
             imputed_amount = float(impute)
             for i in range(1, day_number):
-                imputed_date = start_date + timedelta(days=i)
+                imputed_date = start_date + (timedelta(days=i) if self.use_raw_date else i)
                 imputed_records.append(TLFBRecord(subject_id, imputed_date, imputed_amount, imputation_code))
         return imputed_records
 

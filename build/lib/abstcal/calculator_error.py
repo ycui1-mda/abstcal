@@ -1,3 +1,9 @@
+"""
+AbstinenceCalculatorError
+---------
+A data model for raising exceptions in the abstinence calculation
+"""
+
 import warnings
 
 

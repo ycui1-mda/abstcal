@@ -1,3 +1,8 @@
+"""
+VisitData
+---------
+A data model for processing visit-related data in the abstinence calculation
+"""
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -5,10 +10,15 @@ import seaborn as sns
 from datetime import timedelta
 from abstcal.calculator_error import InputArgumentError, _show_warning
 from abstcal.calculator_data import CalculatorData, DataImputationCode
+from abstcal.abstcal_utils import read_data_from_path, write_data_to_path
 
 
 class VisitData(CalculatorData):
-    def __init__(self, filepath, data_format="long", expected_ordered_visits="infer", included_subjects="all"):
+    _index_keys = ['id', 'visit']
+    _value_key = 'date'
+
+    def __init__(self, filepath, data_format="long", expected_ordered_visits="infer", included_subjects="all",
+                 use_raw_date=True):
         """
         Create the instance object for the visit data
 
@@ -19,7 +29,6 @@ class VisitData(CalculatorData):
             wide: the data have multiple columns and one row per subject, the first column has to be named 'id'
                 and the remaining columns are visits with values being the dates
 
-        :type expected_ordered_visits: object
         :param expected_ordered_visits: Union["infer", list, None], default "infer"
             The expected order of the visits, such that when dates are out of order can be detected
             The list of visit names should match the actual visits in the dataset
@@ -27,18 +36,19 @@ class VisitData(CalculatorData):
             The default is infer, and it means that the order of the visits is sorted based on its numeric or
             alphabetic order
 
-        :param included_subjects: Union[list, tuple], the list of subject ids that are included in the dataset,
-            the default option "all" means that all subjects in the dataset will be used
+        :param included_subjects: Union[list, tuple, set], the list of subject ids that are to be
+            included in the dataset, the default option "all" means that all subjects in the dataset will be used
+
+        :param use_raw_date: Bool, whether the raw date is used in the date column (default: True)
 
         """
-        df_long = super().read_data_from_path(filepath)
+        self.use_raw_date = use_raw_date
+        df_long = read_data_from_path(filepath)
         if data_format == "wide":
             df_long = df_long.melt(id_vars="id", var_name="visit", value_name="date")
-        self.data = self._validated_data(df_long)
+        self.data = self.validate_data(df_long)
         if included_subjects != "all":
             self.data = self.data.loc[self.data["id"].isin(included_subjects), :]
-        self._index_keys = ['id', 'visit']
-        self._value_key = 'date'
         if expected_ordered_visits is not None:
             if expected_ordered_visits != "infer":
                 self.expected_ordered_visits = expected_ordered_visits
@@ -52,33 +62,29 @@ class VisitData(CalculatorData):
         self.subject_ids = set(self.data['id'].unique())
         self.data.reset_index(drop=True, inplace=True)
 
-    @staticmethod
-    def _validated_data(df):
-        CalculatorData._validate_columns(df, ('id', 'visit', 'date'), "visit", "id, visit, and date")
-        df['date'] = pd.to_datetime(df['date'], infer_datetime_format=True)
-        return df
-
     def profile_data(self, min_date_cutoff=None, max_date_cutoff=None):
         """
         Profile the visit data
 
-        :param min_date_cutoff: Union[None, datetime, str], default None
+        :param min_date_cutoff: Union[None, datetime, str, int], default None
             The minimal date allowed for the visit's date, lower than that is considered to be an outlier
             When it's set None, outlier detection won't consider the lower bound
             When it's str, it should be able to be casted to a datetime object, mm/dd/yyyy, such as '10/23/2020'
 
-        :param max_date_cutoff: Union[None, datetime, str], default None
+        :param max_date_cutoff: Union[None, datetime, str, int], default None
             The maximal amount allowed for the consumption, higher than that is considered to be an outlier
             When it's set None, outlier detection won't consider the higher bound
             When it's str, it should be able to be casted to a datetime object, such as '10/23/2020'
 
         :return: Tuple, summaries of the visit data at the sample and subject level
         """
-        casted_min_date_cutoff = pd.to_datetime(min_date_cutoff, infer_datetime_format=True)
-        casted_max_date_cutoff = pd.to_datetime(max_date_cutoff, infer_datetime_format=True)
-        visit_summary_series = self._get_visit_sample_summary(casted_min_date_cutoff, casted_max_date_cutoff)
+        casted_min_date_cutoff = pd.to_datetime(min_date_cutoff, infer_datetime_format=True) if self.use_raw_date \
+            else min_date_cutoff
+        casted_max_date_cutoff = pd.to_datetime(max_date_cutoff, infer_datetime_format=True) if self.use_raw_date \
+            else max_date_cutoff
+        visit_summary_series, grid = self._get_visit_sample_summary(casted_min_date_cutoff, casted_max_date_cutoff)
         visit_subject_summary = self._get_visit_subject_summary(casted_min_date_cutoff, casted_max_date_cutoff)
-        return visit_summary_series, visit_subject_summary
+        return visit_summary_series, visit_subject_summary, grid
 
     def get_out_of_order_visit_data(self):
         """
@@ -124,12 +130,11 @@ class VisitData(CalculatorData):
             rename({'date': 'anchor_date'}, axis=1)
         visit_data_anchored = pd.merge(self.data, anchor_dates, on='id')
         visit_data_anchored['interval_to_anchor'] = (visit_data_anchored['date'] - visit_data_anchored['anchor_date']).\
-            map(lambda x: x.days)
+            map(lambda x: x.days if self.use_raw_date else x)
         self._visit_data = visit_data_anchored.drop(['anchor_date'], axis=1)
 
         grid = sns.FacetGrid(self._visit_data.loc[self._visit_data['visit'] != anchor_visit, :], col="visit")
         grid.map(plt.hist, "interval_to_anchor")
-        plt.show()
 
         for visit in self.visits - {anchor_visit}:
             visit_dates = self._visit_data.dropna().loc[self._visit_data['visit'] == visit, :].\
@@ -144,11 +149,11 @@ class VisitData(CalculatorData):
 
         visit_record_counts = self.data.groupby(['visit'])['date'].count().to_dict()
         subject_count = len(self.subject_ids)
-        visit_summary.update(
-            {f"visit_{visit}_attendance": f"{count} ({count / subject_count:.2%})"
-             for visit, count in visit_record_counts.items()}
-        )
-        return pd.Series(visit_summary)
+        visit_summary.update({
+            f"visit_{visit}_attendance": f"{count} ({count / subject_count:.2%})"
+            for visit, count in visit_record_counts.items()
+        })
+        return pd.Series(visit_summary), grid
 
     def get_retention_rates(self, filepath=None):
         _data = self.data
@@ -180,7 +185,7 @@ class VisitData(CalculatorData):
         retention_df['attendance_rate'] = self.data['visit'].value_counts().map(
             lambda x: f"{x / subject_count:.2%}"
         )
-        CalculatorData.write_data_to_path(retention_df, filepath, True)
+        write_data_to_path(retention_df, filepath, True)
         return retention_df
 
     def _get_visit_subject_summary(self, min_date_cutoff=None, max_date_cutoff=None):
@@ -188,7 +193,8 @@ class VisitData(CalculatorData):
             "date": ["count", "min", "max"]
         })
         visit_dates_amounts['date_interval'] = \
-            (visit_dates_amounts[('date', 'max')] - visit_dates_amounts[('date', 'min')]).map(lambda x: x.days)
+            (visit_dates_amounts[('date', 'max')] - visit_dates_amounts[('date', 'min')]).\
+                map(lambda x: x.days if self.use_raw_date else x)
         summary_dfs = [visit_dates_amounts]
         col_names = ['record_count', 'date_min', 'date_max', 'date_interval', 'duplicates_count']
         summary_dfs.append(self.data.loc[self.data.duplicated(['id', 'visit'], keep=False), :].groupby(
@@ -218,9 +224,9 @@ class VisitData(CalculatorData):
             else:
                 _show_warning("Supported options for expected_ordered_visits are list of visits, None, and infer. "
                               "The expected visit order is inferred to check if the dates are in the correct order.")
-            sorted_visit_data = _temp_data.sort_values(by=['id', 'visit'], ignore_index=True)
+            sorted_visit_data = _temp_data.sort_values(by=self._index_keys, ignore_index=True)
             sorted_visit_data['ascending'] = sorted_visit_data.groupby(['id'])['date'].diff().map(
-                lambda x: True if x is pd.NaT or x.days >= 0 else False
+                lambda x: True if pd.isnull(x) or (x.days if self.use_raw_date else x) >= 0 else False
             )
             visits_out_of_order = sorted_visit_data.groupby(['id'])['ascending'].all().map(lambda x: not x)
             if visits_out_of_order.sum() > 0:
@@ -247,14 +253,18 @@ class VisitData(CalculatorData):
         :return: summary of the recoding
         """
         recode_summary = dict()
-        casted_floor_date = pd.to_datetime(floor_date, infer_datetime_format=True)
+        casted_floor_date = pd.to_datetime(floor_date, infer_datetime_format=True) if self.use_raw_date else floor_date
         outlier_count_low = int(pd.Series(self.data['date'] < casted_floor_date).sum())
-        recode_summary[f"Number of outliers (< {casted_floor_date.strftime('%m/%d/%Y')})"] = outlier_count_low
+        outliers_low_key = f"Number of outliers " \
+                           f"(< {casted_floor_date.strftime('%m/%d/%Y') if self.use_raw_date else casted_floor_date})"
+        recode_summary[outliers_low_key] = outlier_count_low
         self.data['date'] = self.data['date'].map(
             lambda x: np.nan if drop_outliers and x < casted_floor_date else max(x, casted_floor_date))
-        casted_ceil_date = pd.to_datetime(ceil_date, infer_datetime_format=True)
+        casted_ceil_date = pd.to_datetime(ceil_date, infer_datetime_format=True) if self.use_raw_date else ceil_date
         outlier_count_high = int(pd.Series(self.data['date'] > casted_ceil_date).sum())
-        recode_summary[f"Number of outliers (> {casted_ceil_date.strftime('%m/%d/%Y')})"] = outlier_count_high
+        outliers_high_key = f"Number of outliers " \
+                            f"(> {casted_ceil_date.strftime('%m/%d/%Y') if self.use_raw_date else casted_ceil_date})"
+        recode_summary[outliers_high_key] = outlier_count_high
         self.data['date'] = self.data['date'].map(
             lambda x: np.nan if drop_outliers and x > casted_ceil_date else min(x, casted_ceil_date))
         if drop_outliers:
@@ -262,7 +272,7 @@ class VisitData(CalculatorData):
         return recode_summary
 
     # noinspection PyTypeChecker
-    def impute_data(self, anchor_visit='infer', impute='freq'):
+    def impute_data(self, impute='freq', anchor_visit='infer'):
         """
         Impute any missing visit data.
 
@@ -285,15 +295,17 @@ class VisitData(CalculatorData):
         if impute is None or str(impute).lower() == "none":
             return
         if impute not in ('freq', 'mean') and not isinstance(impute, dict):
-            raise InputArgumentError('You can only specify the imputation method to be "freq" or "mean". Alternatively,'
-                                     'you can specify a dictionary object mapping the number of days since the anchor'
-                                     'visit.')
+            raise InputArgumentError(
+                'You can only specify the imputation method to be "freq" or "mean". Alternatively, '
+                'you can specify a dictionary object mapping the number of days since the anchor '
+                'visit.'
+            )
 
         if 'imputation_code' in self.data.columns:
             self.data = self.data[self.data['imputation_code'] == 0]
 
         self.data = self.data.sort_values(by=self._index_keys, ignore_index=True)
-        if anchor_visit == 'infer':
+        if anchor_visit == 'infer' or anchor_visit is None:
             min_date_indices = self.data.groupby(['id'])['date'].idxmin()
             anchor_visit = self.data.loc[min_date_indices, 'visit'].value_counts().idxmax()
 
@@ -318,7 +330,7 @@ class VisitData(CalculatorData):
             visit_dates = self.data.loc[self.data['visit'] == visit, ['id', 'date']]
             df_visit = pd.merge(anchor_df, visit_dates, how='outer', on='id')
             days_diff = (df_visit['date'] - df_visit['anchor_date']).map(
-                lambda day_diff: day_diff.days if pd.notnull(day_diff) else np.nan)
+                lambda day_diff: (day_diff.days if self.use_raw_date else day_diff)if pd.notnull(day_diff) else np.nan)
             if impute == 'freq':
                 used_days_diff = days_diff.value_counts().idxmax()
             elif impute == 'mean':
@@ -329,7 +341,8 @@ class VisitData(CalculatorData):
             def impute_date(x):
                 if pd.notnull(x['date']):
                     return x['date']
-                imputed_date = x['anchor_date'] + timedelta(days=used_days_diff)
+                imputed_date = x['anchor_date'] + \
+                               (timedelta(days=used_days_diff) if self.use_raw_date else used_days_diff)
                 return imputed_date
 
             df_visit['imputed_date'] = df_visit.apply(impute_date, axis=1)
@@ -348,12 +361,27 @@ class VisitData(CalculatorData):
         )
         return impute_summary
 
-    def validate_visits(self, visits_to_check):
+    def _validate_visits(self, visits_to_check):
         if not set(visits_to_check).issubset(self.visits):
-            raise InputArgumentError(f"Some visits are not in the visit list {self.visits}. "
-                                     f"Please check your arguments.")
+            raise InputArgumentError(
+                f"Some visits are not in the visit list {self.visits}. Please check your arguments."
+            )
 
     def get_visit_dates(self, subject_id, visit_names, increment_days=0, mode='itt'):
+        """
+        Retrieve the visit data for any given subject and visits
+
+        :param subject_id: the subject id
+
+        :param visit_names: the names of the visits
+
+        :param increment_days: the number of day intervals to apply to the retrieved dates
+
+        :param mode: ITT or RO, if ITT, the data will include imputed dates, otherwise, only raw data are used
+
+        :return: List, the dates that matching the query criteria
+        """
+
         used_data = self.data
         if mode != 'itt':
             used_data = self.data.loc[self.data['imputation_code'] == DataImputationCode.RAW.value, :]
@@ -362,5 +390,33 @@ class VisitData(CalculatorData):
         visit_dates_cond = (used_data['id'] == subject_id) & (used_data['visit'].isin(visit_names))
         dates = list(used_data.loc[visit_dates_cond, 'date'])
         if increment_days:
-            dates = [date + timedelta(days=increment_days) for date in dates]
+            dates = [date + (timedelta(days=increment_days) if self.use_raw_date else increment_days) for date in dates]
         return dates
+
+    @staticmethod
+    def add_additional_visit_dates(visit_filepath, visit_dates, use_raw_date):
+        """
+        Add additional visit with dates using existing visits
+
+        :param visit_filepath: Union[Path, str, DataFrame], the filepath to the visit data, or DataFrame of the visit data
+            in the long format
+
+        :param visit_dates: list[Tuple], the list of tuples, with each tuple having three items: the new visit name,
+            the reference visit, the number of days to add (if you subtract the number of days, set it to negative)
+
+        :param use_raw_date: whether the dates in the date column uses the raw dates (True), when False it means the dates
+            are day counters
+
+        :return: DataFrame
+        """
+        visit_df = CalculatorData.read_data_from_path(visit_filepath)
+        visit_wide = visit_df.pivot(index="id", columns="visit", values="date").reset_index()
+        for new_visit, reference_visit, days in visit_dates:
+            visit_wide[new_visit] = visit_wide[reference_visit] + (timedelta(days=days) if use_raw_date else days)
+        return visit_wide.melt(id_vars="id", var_name="visit", value_name="date") \
+            .sort_values(by=['id', 'visit', 'date'], ignore_index=True)
+
+
+# Aliases for different preferences
+TimePointData = MilestoneData = VisitData
+

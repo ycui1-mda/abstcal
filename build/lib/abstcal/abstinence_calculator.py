@@ -1,10 +1,15 @@
+"""
+AbstinenceCalculator
+---------
+A data model for calculating abstinence data from TLFB and visit data
+"""
 from datetime import timedelta
 import pandas as pd
 import numpy as np
-from abstcal.calculator_data import CalculatorData
-from abstcal import TLFBData
-from abstcal import VisitData
+from abstcal.tlfb_data import TLFBData
+from abstcal.visit_data import VisitData
 from abstcal.calculator_error import InputArgumentError, _show_warning
+from abstcal.abstcal_utils import write_data_to_path
 
 
 class AbstinenceCalculator:
@@ -23,6 +28,10 @@ class AbstinenceCalculator:
         self.subject_ids = sorted(tlfb_data.subject_ids & visit_data.subject_ids)
 
     def check_data_availability(self):
+        """
+        Check the data availability by crossing the TLFB dataset and Visit dataset
+        :return: DataFrame
+        """
         tlfb_ids = pd.Series({subject_id: 'Yes' for subject_id in self.tlfb_data.subject_ids}, name='TLFB Data')
         visit_ids = pd.Series({subject_id: 'Yes' for subject_id in self.visit_data.subject_ids}, name='Visit Data')
         crossed_data = pd.concat([tlfb_ids, visit_ids], axis=1).fillna('No')
@@ -332,7 +341,7 @@ class AbstinenceCalculator:
             data_rows.append(data_row)
 
         df = pd.DataFrame(data_rows, columns=['Abstinence Name', 'Abstinent Count', 'Subject Count', 'Abstinence Rate'])
-        CalculatorData.write_data_to_path(df, filepath, True)
+        write_data_to_path(df, filepath, True)
         return df
 
     @staticmethod
@@ -348,7 +357,7 @@ class AbstinenceCalculator:
         """
         dfs = AbstinenceCalculator._listize_args(dfs)
         merged_df = pd.concat(dfs, axis=1)
-        CalculatorData.write_data_to_path(merged_df, filepath, True)
+        write_data_to_path(merged_df, filepath, True)
         return merged_df
 
     @staticmethod
@@ -364,5 +373,5 @@ class AbstinenceCalculator:
         """
         dfs = AbstinenceCalculator._listize_args(dfs)
         merged_df = pd.concat(dfs, axis=0)
-        CalculatorData.write_data_to_path(merged_df, filepath)
+        write_data_to_path(merged_df, filepath)
         return merged_df
