@@ -14,6 +14,7 @@ from abstcal.calculator_error import InputArgumentError, FileExtensionError
 import streamlit as st
 from streamlit.report_thread import get_report_ctx
 
+
 def read_data_from_path(filepath):
     """
     Read data from the specified path
@@ -51,7 +52,7 @@ def from_wide_to_long(data_filepath, data_source_type, subject_col_name="id"):
 
     :return: DataFrame, the transformed data in the long format
     """
-    wide_df = CalculatorData.read_data_from_path(data_filepath)
+    wide_df = read_data_from_path(data_filepath)
     if data_source_type == "tlfb":
         var_col_name, value_col_name = "date", "amount"
     else:
@@ -76,13 +77,13 @@ def mask_dates(tlfb_filepath, bio_filepath, visit_filepath, reference):
 
     :return: two DataFrames for visit and TLFB, respectively
     """
-    visit_df = CalculatorData.read_data_from_path(visit_filepath)
+    visit_df = read_data_from_path(visit_filepath)
 
-    tlfb_df = CalculatorData.read_data_from_path(tlfb_filepath)
+    tlfb_df = read_data_from_path(tlfb_filepath)
 
     tlfb_dfs = list()
     for filepath in filter(lambda x: x is not None, (tlfb_filepath, bio_filepath)):
-        tlfb_df = CalculatorData.read_data_from_path(filepath)
+        tlfb_df = read_data_from_path(filepath)
         tlfb_dfs.append(tlfb_df)
 
     if reference in visit_df['visit'].unique():
