@@ -112,7 +112,7 @@ def mask_dates(tlfb_filepath, bio_filepath, visit_filepath, reference):
             for tlfb_df in tlfb_dfs:
                 tlfb_df['date'] = (tlfb_df['date'] - reference_date).map(lambda x: x.days)
             visit_df['date'] = (visit_df['date'] - reference_date).map(lambda x: x.days)
-        return *tlfb_df, visit_df
+        return tuple((*tlfb_dfs, visit_df))
 
 
 def write_data_to_path(df, filepath, index=False):
