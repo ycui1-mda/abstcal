@@ -10,6 +10,7 @@ import seaborn as sns
 from datetime import timedelta
 from abstcal.calculator_error import InputArgumentError, _show_warning
 from abstcal.calculator_data import CalculatorData, DataImputationCode
+from abstcal.abstcal_utils import read_data_from_path, write_data_to_path
 
 
 class VisitData(CalculatorData):
@@ -42,7 +43,7 @@ class VisitData(CalculatorData):
 
         """
         self.use_raw_date = use_raw_date
-        df_long = super().read_data_from_path(filepath)
+        df_long = read_data_from_path(filepath)
         if data_format == "wide":
             df_long = df_long.melt(id_vars="id", var_name="visit", value_name="date")
         self.data = self.validate_data(df_long)
@@ -184,7 +185,7 @@ class VisitData(CalculatorData):
         retention_df['attendance_rate'] = self.data['visit'].value_counts().map(
             lambda x: f"{x / subject_count:.2%}"
         )
-        CalculatorData.write_data_to_path(retention_df, filepath, True)
+        write_data_to_path(retention_df, filepath, True)
         return retention_df
 
     def _get_visit_subject_summary(self, min_date_cutoff=None, max_date_cutoff=None):

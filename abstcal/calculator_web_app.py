@@ -1,3 +1,7 @@
+"""
+A web app for calculating abstinence data from TLFB and visit data using the abstcal package
+"""
+
 import base64
 import datetime
 import io

@@ -8,6 +8,7 @@ from collections import namedtuple
 from datetime import timedelta
 from abstcal.calculator_error import InputArgumentError
 from abstcal.calculator_data import CalculatorData, DataImputationCode
+from abstcal.abstcal_utils import read_data_from_path
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -34,7 +35,7 @@ class TLFBData(CalculatorData):
 
         """
         self.use_raw_date = use_raw_date
-        df = super().read_data_from_path(filepath)
+        df = read_data_from_path(filepath)
         self.data = self.validate_data(df)
         if included_subjects and included_subjects != "all":
             self.data = self.data.loc[self.data["id"].isin(included_subjects), :].reset_index(drop=True)
