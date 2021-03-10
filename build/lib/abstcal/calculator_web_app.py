@@ -22,7 +22,7 @@ from_wide_to_long = abstcal_utils.from_wide_to_long
 mask_dates = abstcal_utils.mask_dates
 
 
-abstcal_version = '0.7.3'
+abstcal_version = '0.7.7'
 update_date = datetime.date.today().strftime("%m/%d/%Y")
 sidebar = st.sidebar
 supported_file_types = ["csv", "xls", "xlsx"]
