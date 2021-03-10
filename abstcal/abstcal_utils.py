@@ -102,7 +102,7 @@ def mask_dates(tlfb_filepath, bio_filepath, visit_filepath, reference):
         visit_df_anchored['date'] = (visit_df_anchored['date'] - visit_df_anchored['anchor_date']).map(
             lambda x: x.days if pd.notnull(x) else np.nan
         )
-        return *tlfb_dfs_anchored, visit_df_anchored.drop("anchor_date", axis=1)
+        return tuple((*tlfb_dfs_anchored, visit_df_anchored.drop("anchor_date", axis=1)))
     else:
         try:
             reference_date = pd.to_datetime(reference)
