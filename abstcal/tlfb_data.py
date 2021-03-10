@@ -16,6 +16,9 @@ TLFBRecord = namedtuple("TLFBRecord", "id date amount imputation_code")
 
 
 class TLFBData(CalculatorData):
+    _index_keys = ['id', 'date']
+    _value_key = 'amount'
+
     def __init__(self, filepath, abst_cutoff=0, included_subjects="all", use_raw_date=True):
         """
         Create the instance object for the TLFB data
@@ -30,24 +33,14 @@ class TLFBData(CalculatorData):
         :param use_raw_date: Bool, whether the raw date is used in the date column (default: True)
 
         """
+        self.use_raw_date = use_raw_date
         df = super().read_data_from_path(filepath)
-        self.data = TLFBData._validated_data(df, use_raw_date)
+        self.data = self.validate_data(df)
         if included_subjects and included_subjects != "all":
             self.data = self.data.loc[self.data["id"].isin(included_subjects), :].reset_index(drop=True)
 
-        self._index_keys = ['id', 'date']
-        self._value_key = 'amount'
         self.subject_ids = set(self.data['id'].unique())
         self.abst_cutoff = abst_cutoff
-        self.use_raw_date = use_raw_date
-
-    @staticmethod
-    def _validated_data(df, cast_date):
-        CalculatorData._validate_columns(df, ('id', 'date', 'amount'), "TLFB", "id, date, and amount")
-        if cast_date:
-            df['date'] = pd.to_datetime(df['date'], infer_datetime_format=True)
-        df['amount'] = df['amount'].astype(float)
-        return df
 
     def profile_data(self, min_amount_cutoff=None, max_amount_cutoff=None):
         """

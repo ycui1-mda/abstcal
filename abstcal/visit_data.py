@@ -13,6 +13,9 @@ from abstcal.calculator_data import CalculatorData, DataImputationCode
 
 
 class VisitData(CalculatorData):
+    _index_keys = ['id', 'visit']
+    _value_key = 'date'
+
     def __init__(self, filepath, data_format="long", expected_ordered_visits="infer", included_subjects="all",
                  use_raw_date=True):
         """
@@ -38,14 +41,13 @@ class VisitData(CalculatorData):
         :param use_raw_date: Bool, whether the raw date is used in the date column (default: True)
 
         """
+        self.use_raw_date = use_raw_date
         df_long = super().read_data_from_path(filepath)
         if data_format == "wide":
             df_long = df_long.melt(id_vars="id", var_name="visit", value_name="date")
-        self.data = VisitData._validated_data(df_long, use_raw_date)
+        self.data = self.validate_data(df_long)
         if included_subjects != "all":
             self.data = self.data.loc[self.data["id"].isin(included_subjects), :]
-        self._index_keys = ['id', 'visit']
-        self._value_key = 'date'
         if expected_ordered_visits is not None:
             if expected_ordered_visits != "infer":
                 self.expected_ordered_visits = expected_ordered_visits
@@ -58,14 +60,6 @@ class VisitData(CalculatorData):
         self.visits = set(self.data['visit'].unique())
         self.subject_ids = set(self.data['id'].unique())
         self.data.reset_index(drop=True, inplace=True)
-        self.use_raw_date = use_raw_date
-
-    @staticmethod
-    def _validated_data(df, cast_date):
-        CalculatorData._validate_columns(df, ('id', 'visit', 'date'), "visit", "id, visit, and date")
-        if cast_date:
-            df['date'] = pd.to_datetime(df['date'], infer_datetime_format=True)
-        return df
 
     def profile_data(self, min_date_cutoff=None, max_date_cutoff=None):
         """
@@ -398,6 +392,30 @@ class VisitData(CalculatorData):
             dates = [date + (timedelta(days=increment_days) if self.use_raw_date else increment_days) for date in dates]
         return dates
 
+    @staticmethod
+    def add_additional_visit_dates(visit_filepath, visit_dates, use_raw_date):
+        """
+        Add additional visit with dates using existing visits
+
+        :param visit_filepath: Union[Path, str, DataFrame], the filepath to the visit data, or DataFrame of the visit data
+            in the long format
+
+        :param visit_dates: list[Tuple], the list of tuples, with each tuple having three items: the new visit name,
+            the reference visit, the number of days to add (if you subtract the number of days, set it to negative)
+
+        :param use_raw_date: whether the dates in the date column uses the raw dates (True), when False it means the dates
+            are day counters
+
+        :return: DataFrame
+        """
+        visit_df = CalculatorData.read_data_from_path(visit_filepath)
+        visit_wide = visit_df.pivot(index="id", columns="visit", values="date").reset_index()
+        for new_visit, reference_visit, days in visit_dates:
+            visit_wide[new_visit] = visit_wide[reference_visit] + (timedelta(days=days) if use_raw_date else days)
+        return visit_wide.melt(id_vars="id", var_name="visit", value_name="date") \
+            .sort_values(by=['id', 'visit', 'date'], ignore_index=True)
+
 
 # Aliases for different preferences
 TimePointData = MilestoneData = VisitData
+
