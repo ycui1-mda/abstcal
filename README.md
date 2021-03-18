@@ -27,7 +27,7 @@ With this option, you don't have to worry about installing Python and any Python
 
 ### Web App Interface
 If you don't want to use the non-GUI environment, you can use the package's web app, please go to 
-[abstcal Hosted by Streamlit](https://share.streamlit.io/ycui1-mda/abstcal/calculator_web_app.py). The web app provides the
+[abstcal Hosted by Streamlit](https://share.streamlit.io/ycui1-mda/abstcal/abstcal/calculator_web_app.py). The web app provides the
 core functionalities of the package. You can find more detailed instructions on the web page.
 
 If you're concerned about data privacy and security associated with using the web app hosted online, you can use the 
