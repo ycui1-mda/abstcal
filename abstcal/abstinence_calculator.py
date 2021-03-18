@@ -130,7 +130,7 @@ class AbstinenceCalculator:
 
             for day_i, day in enumerate(days):
                 for end_date_i, end_date in enumerate(end_dates):
-                    start_date = end_date + timedelta(days=-day)
+                    start_date = end_date + (timedelta(days=-day) if self.tlfb_data.use_raw_date else -day)
                     abstinent, lapse = self._score_continuous(subject_id, start_date, end_date, mode)
                     result.append(abstinent)
                     abst_name = all_abst_names[len(end_dates) * day_i + end_date_i]
@@ -250,7 +250,10 @@ class AbstinenceCalculator:
                                                 break
                                     if lapse is not None:
                                         break
-                            if subject_data['amount'].count() == int((end_date - start_date).days):
+
+                            days = int((end_date - start_date).days
+                                       if self.tlfb_data.use_raw_date else (end_date - start_date))
+                            if subject_data['amount'].count() == days:
                                 abstinent = int(lapse is None)
 
                     result.append(abstinent)
@@ -303,7 +306,7 @@ class AbstinenceCalculator:
     def _continuous_abst(self, subject_id, start_date, end_date, mode):
         subject_data = self.tlfb_data.get_subject_data(subject_id, start_date, end_date, mode)
         lapse_record = None
-        days_to_check = int((end_date - start_date).days)
+        days_to_check = int((end_date - start_date).days if self.tlfb_data.use_raw_date else (end_date - start_date))
         no_missing_data = subject_data['amount'].count() == days_to_check
         if mode == "ro" and (not no_missing_data):
             return np.nan, None

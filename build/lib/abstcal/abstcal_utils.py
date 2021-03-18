@@ -58,7 +58,7 @@ def from_wide_to_long(data_filepath, data_source_type, subject_col_name="id"):
         var_col_name, value_col_name = "visit", "date"
     long_df = wide_df.melt(id_vars=subject_col_name, var_name=var_col_name, value_name=value_col_name)
     long_df.rename(columns={subject_col_name: "id"}, inplace=True)
-    return long_df
+    return long_df.sort_values(by=[subject_col_name, var_col_name]).dropna()
 
 
 def mask_dates(tlfb_filepath, bio_filepath, visit_filepath, reference):
@@ -67,9 +67,9 @@ def mask_dates(tlfb_filepath, bio_filepath, visit_filepath, reference):
 
     :param tlfb_filepath: the DataFrame object or filepath to the TLFB data (e.g., csv, xls, xlsx)
 
-    :param visit_filepath: the DataFrame object or filepath to the visit data (e.g., csv, xls, xlsx)
-
     :param bio_filepath: the DataFrame object or filepath to the biochemical data (e.g., csv, xls, xlsx)
+
+    :param visit_filepath: the DataFrame object or filepath to the visit data (e.g., csv, xls, xlsx)
 
     :param reference: the anchor visit [it must be one member of visit list]
         or arbitrary date Union[str "mm/dd/yyyy", datetime.date] using which to mask the dates in these datasets
@@ -77,12 +77,11 @@ def mask_dates(tlfb_filepath, bio_filepath, visit_filepath, reference):
     :return: two DataFrames for visit and TLFB, respectively
     """
     visit_df = read_data_from_path(visit_filepath)
-
-    tlfb_df = read_data_from_path(tlfb_filepath)
-
+    visit_df['date'] = pd.to_datetime(visit_df['date'], infer_datetime_format=True)
     tlfb_dfs = list()
     for filepath in filter(lambda x: x is not None, (tlfb_filepath, bio_filepath)):
         tlfb_df = read_data_from_path(filepath)
+        tlfb_df['date'] = pd.to_datetime(tlfb_df['date'], infer_datetime_format=True)
         tlfb_dfs.append(tlfb_df)
 
     if reference in visit_df['visit'].unique():
@@ -105,7 +104,7 @@ def mask_dates(tlfb_filepath, bio_filepath, visit_filepath, reference):
         return tuple((*tlfb_dfs_anchored, visit_df_anchored.drop("anchor_date", axis=1)))
     else:
         try:
-            reference_date = pd.to_datetime(reference)
+            reference_date = pd.to_datetime(reference, infer_datetime_format=True)
         except TypeError:
             raise InputArgumentError("You're expecting to pass a date object or string as a reference.")
         else:

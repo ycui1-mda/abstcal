@@ -31,7 +31,7 @@ class TLFBData(CalculatorData):
         :param included_subjects: Union[list, tuple], the list of subject ids that are included in the dataset,
             the default option "all" means that all subjects in the dataset will be used
 
-        :param use_raw_date: Bool, whether the raw date is used in the date column (default: True)
+        :param use_raw_date: bool, whether the raw date is used in the date column (default: True)
 
         """
         self.use_raw_date = use_raw_date
@@ -187,14 +187,20 @@ class TLFBData(CalculatorData):
         :return: Summary of the recoding
         """
         recode_summary = dict()
-        outlier_count_low = int(pd.Series(self.data['amount'] < floor_amount).sum())
-        recode_summary[f'Number of outliers (< {floor_amount})'] = outlier_count_low
-        self.data['amount'] = self.data['amount'].map(
-            lambda x: np.nan if drop_outliers and x < floor_amount else max(x, floor_amount))
-        outlier_count_high = int(pd.Series(self.data['amount'] > ceil_amount).sum())
-        recode_summary[f'Number of outliers (> {ceil_amount})'] = outlier_count_high
-        self.data['amount'] = self.data['amount'].map(
-            lambda x: np.nan if drop_outliers and x > ceil_amount else min(x, ceil_amount))
+        if floor_amount is not None:
+            outlier_count_low = int(pd.Series(self.data['amount'] < floor_amount).sum())
+            recode_summary[f'Number of outliers (< {floor_amount})'] = outlier_count_low
+            self.data['amount'] = self.data['amount'].map(
+                lambda x: np.nan if drop_outliers and x < floor_amount else max(x, floor_amount))
+        else:
+            recode_summary[f'Number of outliers below amount (not set)'] = "No outliers were requested"
+        if ceil_amount is not None:
+            outlier_count_high = int(pd.Series(self.data['amount'] > ceil_amount).sum())
+            recode_summary[f'Number of outliers (> {ceil_amount})'] = outlier_count_high
+            self.data['amount'] = self.data['amount'].map(
+                lambda x: np.nan if drop_outliers and x > ceil_amount else min(x, ceil_amount))
+        else:
+            recode_summary[f'Number of outliers above amount (not set)'] = "No outliers were requested"
         if drop_outliers:
             self.drop_na_records()
         return recode_summary

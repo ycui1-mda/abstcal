@@ -5,16 +5,8 @@ A web app for calculating abstinence data from TLFB and visit data using the abs
 import base64
 import datetime
 import io
-import os
-import sys
 import pandas as pd
 import streamlit as st
-# sys.path.append(os.getcwd())
-# from abstcal.tlfb_data import TLFBData
-# from abstcal.visit_data import VisitData
-# from abstcal.abstinence_calculator import AbstinenceCalculator
-# from abstcal.calculator_web_utils import get_saved_session
-# from abstcal.abstcal_utils import from_wide_to_long, mask_dates
 from abstcal import TLFBData, VisitData, AbstinenceCalculator, abstcal_utils
 
 get_saved_session = abstcal_utils.get_saved_session
@@ -22,8 +14,8 @@ from_wide_to_long = abstcal_utils.from_wide_to_long
 mask_dates = abstcal_utils.mask_dates
 
 
-abstcal_version = '0.7.7'
-update_date = datetime.date.today().strftime("%m/%d/%Y")
+abstcal_version = '0.8'
+update_date = 'Mar 17, 2021'
 sidebar = st.sidebar
 supported_file_types = ["csv", "xls", "xlsx"]
 
@@ -230,7 +222,7 @@ def _create_date_masking_tool():
             _pop_download_link(masked_tlfb_df, "masked_tlfb", "Masked TLFB Data",
                                container=masking_tool)
             if masked_bio_df:
-                _pop_download_link(masked_tlfb_df[0], "masked_bio", "Masked Bio Data",
+                _pop_download_link(masked_bio_df[0], "masked_bio", "Masked Bio Data",
                                    container=masking_tool)
             _pop_download_link(masked_visit_df, "masked_visit", "Masked Visit Data",
                                container=masking_tool)

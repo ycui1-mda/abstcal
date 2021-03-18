@@ -253,20 +253,27 @@ class VisitData(CalculatorData):
         :return: summary of the recoding
         """
         recode_summary = dict()
-        casted_floor_date = pd.to_datetime(floor_date, infer_datetime_format=True) if self.use_raw_date else floor_date
-        outlier_count_low = int(pd.Series(self.data['date'] < casted_floor_date).sum())
-        outliers_low_key = f"Number of outliers " \
-                           f"(< {casted_floor_date.strftime('%m/%d/%Y') if self.use_raw_date else casted_floor_date})"
-        recode_summary[outliers_low_key] = outlier_count_low
-        self.data['date'] = self.data['date'].map(
-            lambda x: np.nan if drop_outliers and x < casted_floor_date else max(x, casted_floor_date))
-        casted_ceil_date = pd.to_datetime(ceil_date, infer_datetime_format=True) if self.use_raw_date else ceil_date
-        outlier_count_high = int(pd.Series(self.data['date'] > casted_ceil_date).sum())
-        outliers_high_key = f"Number of outliers " \
-                            f"(> {casted_ceil_date.strftime('%m/%d/%Y') if self.use_raw_date else casted_ceil_date})"
-        recode_summary[outliers_high_key] = outlier_count_high
-        self.data['date'] = self.data['date'].map(
-            lambda x: np.nan if drop_outliers and x > casted_ceil_date else min(x, casted_ceil_date))
+        if floor_date is not None:
+            casted_floor_date = pd.to_datetime(floor_date, infer_datetime_format=True) \
+                if self.use_raw_date else floor_date
+            outlier_count_low = int(pd.Series(self.data['date'] < casted_floor_date).sum())
+            outliers_low_key = f"Number of outliers " \
+                               f"(< {casted_floor_date.strftime('%m/%d/%Y') if self.use_raw_date else casted_floor_date})"
+            recode_summary[outliers_low_key] = outlier_count_low
+            self.data['date'] = self.data['date'].map(
+                lambda x: np.nan if drop_outliers and x < casted_floor_date else max(x, casted_floor_date))
+        else:
+            recode_summary[f'Number of outliers below date (not set)'] = "No outliers were requested"
+        if ceil_date is not None:
+            casted_ceil_date = pd.to_datetime(ceil_date, infer_datetime_format=True) if self.use_raw_date else ceil_date
+            outlier_count_high = int(pd.Series(self.data['date'] > casted_ceil_date).sum())
+            outliers_high_key = f"Number of outliers " \
+                                f"(> {casted_ceil_date.strftime('%m/%d/%Y') if self.use_raw_date else casted_ceil_date})"
+            recode_summary[outliers_high_key] = outlier_count_high
+            self.data['date'] = self.data['date'].map(
+                lambda x: np.nan if drop_outliers and x > casted_ceil_date else min(x, casted_ceil_date))
+        else:
+            recode_summary[f'Number of outliers above date (not set)'] = "No outliers were requested"
         if drop_outliers:
             self.drop_na_records()
         return recode_summary
@@ -409,12 +416,14 @@ class VisitData(CalculatorData):
 
         :return: DataFrame
         """
-        visit_df = CalculatorData.read_data_from_path(visit_filepath)
+        visit_df = read_data_from_path(visit_filepath)
+        if use_raw_date:
+            visit_df['date'] = pd.to_datetime(visit_df['date'], infer_datetime_format=True)
         visit_wide = visit_df.pivot(index="id", columns="visit", values="date").reset_index()
         for new_visit, reference_visit, days in visit_dates:
             visit_wide[new_visit] = visit_wide[reference_visit] + (timedelta(days=days) if use_raw_date else days)
         return visit_wide.melt(id_vars="id", var_name="visit", value_name="date") \
-            .sort_values(by=['id', 'visit', 'date'], ignore_index=True)
+            .sort_values(by=['id', 'visit', 'date'], ignore_index=True).dropna()
 
 
 # Aliases for different preferences
