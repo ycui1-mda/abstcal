@@ -15,7 +15,7 @@ mask_dates = abstcal_utils.mask_dates
 
 
 abstcal_version = '0.8'
-update_date = 'Mar 17, 2021'
+update_date = 'May 4, 2021'
 sidebar = st.sidebar
 supported_file_types = ["csv", "xls", "xlsx"]
 
@@ -275,6 +275,10 @@ def _load_overview_elements():
                 "[GitHub](https://github.com/ycui1-mda/abstcal) page for more information.")
     st.markdown(f"Current Version of abstcal: __{abstcal_version}__")
     st.markdown(f"Last Update Date: __{update_date}__")
+    st.markdown(f"Citation: Cui, Y., Robinson, J.D., Rymer, R.E., Minnix, J.A., & Cinciripini P.M., 2021 "
+                f"Python package abstcal: An open-source tool for calculating abstinence from timeline followback data. "
+                f"Nicotine & Tobacco Research. Advance online publication. "
+                f"[https://doi.org/10.1093/ntr/ntab083](https://doi.org/10.1093/ntr/ntab083)")
     st.markdown("**Disclaimer**: Not following the steps or variation in your source data may result in incorrect "
                 "abstinence results. Please verify your results for accuracy.")
     st.subheader("Basic Steps:")
