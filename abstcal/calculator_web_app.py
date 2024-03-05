@@ -767,10 +767,10 @@ def _load_visit_elements():
     The dataset should have three columns: __*id*__, __*visit*__, 
     and __*date*__. The id column stores the subject ids, each of which should uniquely 
     identify a study subject. The visit column stores the visits. The date column stores 
-    the dates for the visits.  \n\nid | visit | date 
-    ------------ | ------------- | -------------
-    1000 | 0 | 02/03/2019
-    1000 | 1 | 02/10/2019
+    the dates for the visits.  \n\nid | visit | date \n
+    ------------ | ------------- | -------------\n
+    1000 | 0 | 02/03/2019\n
+    1000 | 1 | 02/10/2019\n
     1000 | 2 | 02/17/2019  \n\n\n\n---
       \n**The wide format.** 
     The dataset should have the id column and additional columns 
