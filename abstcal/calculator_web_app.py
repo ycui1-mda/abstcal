@@ -642,7 +642,8 @@ def _load_tlfb_elements():
 
         Please note that the biochemical measures dataset should have the same data structure as you TLFB dataset. 
         In other words, it should have three columns: id, date, and amount.
-
+        """)
+        st.markdown("""
         id | date | amount 
         ------------ | ------------- | -------------
         1000 | 02/03/2019 | 4
