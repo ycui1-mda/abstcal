@@ -488,12 +488,14 @@ def _load_tlfb_elements():
     uses are collected. The amount column stores substance uses for each day. Supported file 
     formats include comma-separated (.csv), tab-delimited (.txt), and Excel spreadsheets (.xls, .xlsx).
     
+    
     id | date | amount
     ------------ | ------------- | -------------
     1000 | 02/03/2019 | 10
     1000 | 02/04/2019 | 8
     1000 | 02/05/2019 | 12
     ***
+    
     """)
     container = st.container()
     uploaded_file = container.file_uploader(
@@ -775,15 +777,18 @@ def _load_visit_elements():
     1000 | 0 | 02/03/2019
     1000 | 1 | 02/10/2019
     1000 | 2 | 02/17/2019
+    ***
     
     **The wide format.** 
     The dataset should have the id column and additional columns 
     with each representing a visit.
     
     id | v0 | v1 | v2 | v3 | v4 | v5
-    ----- | ----- | ----- | ----- | ----- | ----- | ----- |
+    ----- | ----- | ----- | ----- | ----- | ----- | ----- 
     1000 | 02/03/2019 | 02/10/2019 | 02/17/2019 | 03/09/2019 | 04/07/2019 | 05/06/2019
-    1001 | 02/05/2019 | 02/13/2019 | 02/20/2019 | 03/11/2019 | 04/06/2019 | 05/09/2019""")
+    1001 | 02/05/2019 | 02/13/2019 | 02/20/2019 | 03/11/2019 | 04/06/2019 | 05/09/2019
+    ***
+    """)
     container = st.container()
     uploaded_file = container.file_uploader(
         "Specify the Visit data file on your computer.",
