@@ -487,8 +487,8 @@ def _load_tlfb_elements():
     uniquely identify a study subject. The date column stores the dates when daily substance 
     uses are collected. The amount column stores substance uses for each day. Supported file 
     formats include comma-separated (.csv), tab-delimited (.txt), and Excel spreadsheets (.xls, .xlsx).
-    
-    
+    """)
+    st.markdown("""
     id | date | amount
     ------------ | ------------- | -------------
     1000 | 02/03/2019 | 10
