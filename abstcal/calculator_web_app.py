@@ -548,7 +548,7 @@ def _load_tlfb_elements():
 
         st.write("4. TLFB Missing Data Imputation (missing data are gaps having no records between study dates)")
         imputation_summary = dict()
-        imputation_mode_col, imputation_value_col = st.beta_columns(2)
+        imputation_mode_col, imputation_value_col = st.columns(2)
         selected_imputation_mode = imputation_mode_col.selectbox(
             "Select your option",
             tlfb_imputation_options,
@@ -616,7 +616,7 @@ def _load_tlfb_elements():
         )
         tlfb_data_params["outliers_mode"] = outlier_options_mapped[selected_outlier_mode]
         if tlfb_data_params["outliers_mode"] is not None:
-            left_col, right_col = st.beta_columns(2)
+            left_col, right_col = st.columns(2)
             tlfb_data_params["allowed_min"] = left_col.number_input(
                 "Allowed Minimal Daily Value",
                 step=None,
@@ -684,7 +684,7 @@ def _load_tlfb_elements():
                 "Enable Data Interpolation"
             )
             if bio_data_params["enable_interpolation"]:
-                left_col, right_col = st.beta_columns(2)
+                left_col, right_col = st.columns(2)
                 bio_data_params["half_life"] = left_col.number_input(
                     "Half Life of the Biochemical Measure in Days",
                     min_value=0.0,
@@ -878,7 +878,7 @@ def _load_visit_elements():
         )
         visit_data_params["outliers_mode"] = outlier_options_mapped[selected_outlier_mode]
         if visit_data_params["outliers_mode"] is not None:
-            left_col, right_col = st.beta_columns(2)
+            left_col, right_col = st.columns(2)
             visit_data_params["allowed_min"] = left_col.date_input(
                 "Allowed Minimal Visit Date",
                 value=datetime.datetime.today() - datetime.timedelta(days=365 * 10)
@@ -975,7 +975,7 @@ def _load_cal_elements():
     else:
         st.write("The end visit's date won't be included in the calculation. For example, EOT is 07/14/2020, if the "
                  "option is checked, the TLFB up to 07/13/2020 will be included in the calculation.")
-    pp_col, prol_col, cont_col = columns = st.beta_columns(3)
+    pp_col, prol_col, cont_col = columns = st.columns(3)
     abst_params_list = (abst_pp_params, abst_prol_params, abst_cont_params)
     abst_var_name_options = ("Infer automatically", "Specify custom variable names")
     for abst_option, col, abst_params in zip(abst_options, columns, abst_params_list):
