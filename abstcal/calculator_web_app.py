@@ -486,14 +486,14 @@ def _load_tlfb_elements():
     __*date*__, and __*amount*__. The id column stores the subject ids, each of which should 
     uniquely identify a study subject. The date column stores the dates when daily substance 
     uses are collected. The amount column stores substance uses for each day. Supported file 
-    formats include comma-separated (.csv), tab-delimited (.txt), and Excel spreadsheets (.xls, .xlsx).  \n\n
-      \n\n
+    formats include comma-separated (.csv), tab-delimited (.txt), and Excel spreadsheets (.xls, .xlsx).
+    
     id | date | amount
     ------------ | ------------- | -------------
     1000 | 02/03/2019 | 10
     1000 | 02/04/2019 | 8
     1000 | 02/05/2019 | 12
-      \n\n
+    ***
     """)
     container = st.container()
     uploaded_file = container.file_uploader(
