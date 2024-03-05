@@ -641,8 +641,8 @@ def _load_tlfb_elements():
         the self-reported value will be overridden, and the updated record will be used in later abstinence calculation.
 
         Please note that the biochemical measures dataset should have the same data structure as you TLFB dataset. 
-        In other words, it should have three columns: id, date, and amount.
-        """)
+        In other words, it should have three columns: id, date, and amount.""")
+
         st.markdown("""
         id | date | amount 
         ------------ | ------------- | -------------
@@ -651,6 +651,7 @@ def _load_tlfb_elements():
         1000 | 03/04/2019 | 10
         ***
         """)
+
         if has_bio_data:
             bio_container = st.container()
             uploaded_file = bio_container.file_uploader(
