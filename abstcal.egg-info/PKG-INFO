@@ -1,693 +1,693 @@
 Metadata-Version: 2.1
 Name: abstcal
-Version: 0.8
+Version: 0.9
 Summary: Calculate abstinence using the timeline followback data in substance research.
 Home-page: https://github.com/ycui1-mda/abstcal
 Author: Yong Cui
 Author-email: ycui1@mdanderson.org
-License: UNKNOWN
-Description: # Abstinence Calculator
-        
-        A Python package to calculate abstinence results using the timeline followback interview data
-        
-        ## Installation
-        ### Use the package in Python
-        Install the package using the pip tool. If you need instruction on how to install Python, you 
-        can find information at the [Python](https://www.python.org/) website. The pip tool is the most 
-        common Python package management tool, and you can find information about its use instruction at the 
-        [pypa](https://pip.pypa.io/en/stable/installing/) website. The pip tool will be pre-installed
-        if you download Python 3.6+ from [python.org](python.org) directly.
-        
-        Once your computer has Python and pip installed, 
-        you can run the following command in your command line tool, which will install abstcal and its required 
-        dependencies, mainly the [pandas](https://pandas.pydata.org/) (for data processing) and the 
-        [streamlit](https://streamlit.io/) (for the web app development).
-        
-        ```commandline
-        pip install abstcal
-        ```
-        
-        If you're not familiar with Python coding, you can run the 
-        [Jupyter Notebook](https://github.com/ycui1-mda/abstcal/blob/88543f99044dfd0566168e922bab3d81dfb76a14/tests/abstcal_use_example.ipynb) 
-        included on this page on [Google Colab](https://colab.research.google.com), which is an online platform 
-        to run your Python code remotely on a server hosted by Google without any cost. 
-        With this option, you don't have to worry about installing Python and any Python packages on your local computer.
-        
-        ### Web App Interface
-        If you don't want to use the non-GUI environment, you can use the package's web app, please go to 
-        [abstcal Hosted by Streamlit](https://share.streamlit.io/ycui1-mda/abstcal/calculator_web_app.py). The web app provides the
-        core functionalities of the package. You can find more detailed instructions on the web page.
-        
-        If you're concerned about data privacy and security associated with using the web app hosted online, you can use the 
-        web app hosted locally on your computer. However, it requires the installation of Python and Python packages on your
-        computer. Here's the overall instruction.
-        1. Install Python 3.6+ on your computer ([Official Python Downloads](https://www.python.org/downloads/)).
-        2. Install abstcal on your computer (Using the command line tool, run `pip install abstcal`).
-        3. Download the entire package's zip file from the GitHub page.
-        4. Unzip the file to the desired directory on your computer.
-        5. Locate the web app file named _calculator_web_app.py_ and get its full path.   
-        6. Launch the web app locally (Using your command line tool, run `streamlit run the_full_path_to_the_web_app`.
-        
-        *********
-        
-        ## Overview of the Package
-        This package is developed to score abstinence using the Timeline Followback (TLFB) and 
-        visit data in clinical substance use research. It provides functionalities to preprocess 
-        the datasets to remove duplicates and outliers. In addition, it can impute missing data 
-        using various criteria. 
-        
-        It supports the calculation of abstinence of varied definitions, 
-        including continuous, point-prevalence, and prolonged using either intent-to-treat (ITT) 
-        or responders-only assumption. It can optionally integrate biochemical verification data.
-        
-        *********
-        ## Required Datasets
-        #### The Timeline Followback Data (Required)
-        The dataset should have three columns: __*id*__, 
-        __*date*__, and __*amount*__. The id column stores the subject ids, each of which should 
-        uniquely identify a study subject. The date column stores the dates when daily substance 
-        uses are collected. The date column can also use day counters using an anchor date for 
-        each subject. The amount column stores substance uses for each day.
-        
-        ##### Using the raw date
-        id | date | amount 
-        ------------ | ------------- | -------------
-        1000 | 02/03/2019 | 10
-        1000 | 02/04/2019 | 8
-        1000 | 02/05/2019 | 12
-        1000 | 02/06/2019 | 9
-        1000 | 02/07/2019 | 10
-        1000 | 02/08/2019 | 8
-        
-        ##### Using the day counter
-        id | date | amount 
-        ------------ | ------------- | -------------
-        1000 | 1 | 10
-        1000 | 2 | 8
-        1000 | 3 | 12
-        1000 | 4 | 9
-        1000 | 5 | 10
-        1000 | 6 | 8
-        
-        ***
-        
-        #### The Biochemical Measures Dataset (Optional)
-        The dataset should have three columns: __*id*__, 
-        __*date*__, and __*amount*__. The id column stores the subject ids, each of which should 
-        uniquely identify a study subject. The date column stores the dates when daily substance 
-        uses are collected. Similar to the TLFB dataset, the biochemical measures dataset can also
-        use day counters for the date column. The amount column stores the biochemical measures 
-        that verify substance use status.
-        
-        id | date | amount 
-        ------------ | ------------- | -------------
-        1000 | 02/03/2019 | 4
-        1000 | 02/11/2019 | 6
-        1000 | 03/04/2019 | 10
-        1000 | 03/22/2019 | 8
-        1000 | 03/28/2019 | 6
-        1000 | 04/15/2019 | 5
-        
-        ***
-        
-        #### The Visit Data (Required)
-        It needs to be in one of the following two formats.
-        **The long format.** The dataset should have three columns: __*id*__, __*visit*__, 
-        and __*date*__. The id column stores the subject ids, each of which should uniquely 
-        identify a study subject. The visit column stores the visits. The date column stores
-        the dates for the visits.
-        
-        ***
-        
-        id | visit | date 
-        ------------ | ------------- | -------------
-        1000 | 0 | 02/03/2019
-        1000 | 1 | 02/10/2019
-        1000 | 2 | 02/17/2019
-        1000 | 3 | 03/09/2019 
-        1000 | 4 | 04/07/2019 
-        1000 | 5 | 05/06/2019
-        
-        **The wide format.** The dataset should have the id column and additional columns 
-        with each representing a visit.
-        
-        id | v0 | v1 | v2 | v3 | v4 | v5
-        ----- | ----- | ----- | ----- | ----- | ----- | ----- |
-        1000 | 02/03/2019 | 02/10/2019 | 02/17/2019 | 03/09/2019 | 04/07/2019 | 05/06/2019
-        1001 | 02/05/2019 | 02/13/2019 | 02/20/2019 | 03/11/2019 | 04/06/2019 | 05/09/2019
-        
-        ***
-        
-        For both formats, the date values can be day counters, just as the TLFB dataset.
-        
-        ***
-        
-        ## Supported Abstinence Definitions
-        The following abstinence definitions have both calculated as the intent-to-treat (ITT) 
-        or responders-only options. By default, the ITT option is used.
-        1. **Continuous Abstinence**: No substance use in the defined time window. Usually, it 
-        starts with the target quit date.
-        2. **Point-Prevalence Abstinence**: No substance use in the defined time window preceding 
-        the assessment time point.
-        3. **Prolonged Abstinence Without Lapses**: No substance use after the grace period (usually 
-        2 weeks) until the assessment time point.
-        4. **Prolonged Abstinence With Lapses**: Lapses are allowed after the grace period 
-        until the assessment time point.
-        
-        *********
-        
-        ## Use Example
-        Once you have installed abstcal and prepared your datasets according to the format 
-        requirements listed above, you can start to use the tool.
-        
-        ### 1. Import the Package
-        ```python
-        from abstcal import TLFBData, VisitData, AbstinenceCalculator, abstcal_utils
-        ```
-        The `abstcal_utils` is an optional module, which provides some utility functions as
-        discussed in the Optional Features section.
-        
-        ### 2. Process the TLFB Data
-        #### 2a. Read the TLFB data
-        You can either specify the full path of the TLFB data or just the filename if the dataset 
-        is in your current work directory. Supported file formats include comma-separated (.csv), 
-        tab-delimited (.txt), and Excel spreadsheets (.xls, .xlsx).
-        
-        __Note:__ If the date column uses day counters, don't forget to set `False` to the `use_raw_date` parameter.
-        
-        ```python
-        # Use the default settings
-        tlfb_data = TLFBData('path_to_tlfb.csv')
-        
-        # Use additional parameters
-        tlfb_data = TLFBData('path_to_tlfb.csv', abst_cutoff=0, included_subjects="all", use_raw_date=True)
-        # abst_cutoff: set the custom abstinence cutoff, default=0
-        # included_subjects: set the list of subject ids to include in the processed data, default using all subjects
-        # use_raw_date: the TLFB dataset uses the raw dates for the date column when True, if the date column uses day counters, set it to False
-        ```
-        
-        #### 2b. Profile the TLFB data
-        In this step, you will see a report of the data summary, such as the number of records, 
-        the number of subjects, and any applicable abnormal data records, including duplicates 
-        and outliers. In terms of outliers, you can specify the minimal and maximal values for 
-        the substance use amounts. Those values outside the range are considered outliers 
-        and are shown in the summary report.
-        ```python
-        # No outlier identification
-        tlfb_data.profile_data()
-        
-        # Identify outliers that are outside of the range
-        tlfb_data.profile_data(0, 100)
-        
-        # Use the returned values of the function
-        tlfb_summary_overall, tlfb_summary_subject, tlfb_hist_plot = tlfb_data.profile_data()
-        # tlfb_summary_overall: the overall summary of the TLFB data
-        # tlfb_summary_subject: the data summary by subject
-        # tlfb_hist_plot: a histogram of the TLFB amount records
-        
-        # to show the histogram, you can use the utility function, which is just a convenience method to use matplotlib to show the image
-        abstcal_utils.show_figure()
-        ```
-        
-        #### 2c. Drop data records with any missing values
-        Those records with missing *id*, *date*, or *amount* will be removed. The number of removed
-        records will be reported.
-        ```python
-        tlfb_data.drop_na_records()
-        ```
-        
-        #### 2d. Check and remove any duplicate records
-        Duplicate records are identified based on __*id*__ and __*date*__. There are different 
-        ways to remove duplicates: *min*, *max*, or *mean*, which keep the minimal, maximal, 
-        or mean of the duplicate records. You can also have the options to remove all duplicates. 
-        You can also simply view the duplicates and handle these duplicates manually.
-        ```python
-        # Check only, no actions for removing duplicates
-        tlfb_data.check_duplicates(None)
-        
-        # Check and remove duplicates by keeping the minimal
-        tlfb_data.check_duplicates("min")
-        
-        # Check and remove duplicates by keeping the maximal
-        tlfb_data.check_duplicates("max")
-        
-        # Check and remove duplicates by keeping the computed mean (all originals will be removed)
-        tlfb_data.check_duplicates("mean")
-        
-        # Check and remove all duplicates
-        tlfb_data.check_duplicates(False)
-        ```
-        
-        The `check_duplicates` function will return any duplicate records.
-        
-        #### 2e. Recode outliers (optional)
-        Those values outside the specified range are considered outliers. All these outliers will 
-        be removed by default. However, if the users set the drop_outliers argument to be False, 
-        the values lower than the minimal will be recoded as the minimal, while the values higher 
-        than the maximal will be recoded as the maximal.
-        
-        ```python
-        # Set the minimal and maximal values for outlier detection, by default, the outliers will be dropped
-        tlfb_data.recode_outliers(0, 100)
-        
-        # Alternatively, we can recode outliers by replacing them with bounding values
-        tlfb_data.recode_outliers(0, 100, False)
-        ```
-        
-        The `recode_outliers` function returns the summary of the identified outliers.
-        
-        #### 2f. Impute the missing TLFB data
-        To calculate the ITT abstinence, the TLFB data will be imputed for the missing records.
-        All contiguous missing intervals will be identified. Each of the intervals will be imputed
-        based on the two values, the one before and the one after the interval. 
-        
-        You can choose to impute the missing values for the interval using the mean of these two values or
-        interpolate the missing values for the interval using the linear values generated from the
-        two values. Alternatively, you can specify a fixed value, which will be used to impute all
-        missing values.
-        
-        |Imputation Mode | Parameters | Imputed Values 
-        |------------ | ------------- | -------------
-        |Uniform | uniform | Q<sub>t</sub> = (Q<sub>0</sub> + Q<sub>1</sub>) / 2
-        |Linear | linear | Q<sub>t</sub> = m * (t - t<sub>0</sub>) + Q<sub>0</sub> where m is (Q<sub>1</sub> - Q<sub>0</sub>) / (t<sub>1</sub> - t<sub>0</sub>)
-        |Fixed | a numeric value | Use the numeric value to fill all missing gaps
-        
-        Note. Q<sub>0</sub> and Q<sub>1</sub> represent the substance use amount before (t<sub>0</sub>) and after (t<sub>1</sub>) the missing TLFB interval. Q<sub>t</sub> represents the interpolated substance use amount at the time t.
-        
-        The following figure shows you some examples of these different imputation modes.
-        ![Alt text](/tests/TLFB_imputation_examples.png?raw=true "TLFB Imputation Examples")
-        
-        ```python
-        # Use the mean
-        tlfb_data.impute_data("uniform")
-        
-        # Use the linear interpolation
-        tlfb_data.impute_data("linear")
-        
-        # Use a fixed value, whichever is appropriate to your research question
-        tlfb_data.impute_data(1)
-        tlfb_data.impute_data(5)
-        
-        # A calling that uses all possible features
-        tlfb_data.impute_data("linear", last_record_action="ffill", maximum_allowed_gap_days=30, biochemical_data=bio_data, overridden_amount="infer")
-        # last_record_action: how you interpolate TLFB records using each subject's last record, default="ffill", fill forward
-        # maximum_allowed_gap_days: the maximum allowed days for TLFB data imputation
-        # biochemical_data: the biochemical dataset for abstinence verification (details will be provided later)
-        # overridden_amount: with the presence of biochemical data, how false negative TLFB records will be overridden
-        ```
-        
-        ### 3. Process the Visit Data
-        #### 3a. Read the visit data
-        Similar to reading the TLFB data, you can read files in .csv, .txt, .xls, or .xlsx format.
-        It's also supported if your visit dataset is in the univariate format, which means that
-        each subject has only one row of data, and the columns are the visits and their dates.
-        
-        Importantly, it will also detect if any subjects have their visits with the dates that
-        are out of the order. By default, the order is inferred using the numeric or alphabetic 
-        order of the visits. These records with incorrect data may result in wrong
-        abstinence calculations.
-        ```python
-        # Read the visit data in the long format (the default option)
-        visit_data = VisitData("file_path.csv")
-        
-        # Read the visit data in the wide format
-        visit_data = VisitData("file_path.csv", "wide")
-        
-        # Read the visit data and specify the order of the visit
-        visit_data = VisitData("file_path.csv", expected_ordered_visits=[1, 2, 3, 5, 6])
-        ```
-        
-        __Note:__ The name of this visit dataset is nominal. It does not only refer to actual in-person and telephone visits, it also refers to other important milestones or timepoints (e.g., Target Quit Day) in clinical cessation trials. Thus, the visit dataset should incluse all these visits that you need to calculate abstinence. Relatedly, this package has a pre-processing tool that allows you to create "virtual" visits based on existing visits. You can find the instruction on this feature at the end of this page.
-        
-        If you prefer referring to the visit data as time points or milestones, you can do so by creating the visit dataset as following:
-        ```python
-        # If you prefer using time points
-        timepoint_data = TimePointData("file_path.csv")
-        
-        # If you prefer using milestones
-        milestone_data = MilestoneData("file_path.csv")
-        ```
-        
-        __Note:__ If the date column uses the day counters, you'll have to set the `use_raw_date` to `False`, just as processing the TLFB data.
-        ```python
-        # When the dates are day counters
-        visit_data = VisitData("file_path.csv", expected_ordered_visits=[1, 2, 3, 5, 6], use_raw_data=False)
-        ```
-        
-        #### 3b. Profile the visit data
-        You will see a report of the data summary, such as the number of records, the number of 
-        subjects, and any applicable abnormal data records, including duplicates and outliers. 
-        In terms of outliers, you can specify the minimal and maximal values for the dates. The
-        dates will be inferred from strings. Please use the format *mm/dd/yyyy*.
-        ```python
-        # No outlier identification
-        visit_data.profile_data()
-        
-        # Outlier identification
-        visit_data.profile_data("07/01/2000", "12/08/2020")
-        
-        # Use the returned values of the function
-        visit_summary_overall, visit_summary_subject, visit_hist_plot = visit_data.profile_data()
-        # visit_summary_overall: the overall summary of the TLFB data
-        # visit_summary_subject: the data summary by subject
-        # visit_hist_plot: a histogram of the visit records
-        
-        # to show the histogram, you can use the utility function, which is just a convenience method to use matplotlib to show the image
-        abstcal_utils.show_figure()
-        ```
-        
-        #### 3c. Drop data records with any missing values 
-        Those records with missing *id*, *visit*, or *date* will be removed. The number of removed
-        records will be reported.
-        ```python
-        visit_data.drop_na_records()
-        ```
-        
-        #### 3d. Check and remove any duplicate records
-        Duplicate records are identified based on __*id*__ and __*visit*__. There are different 
-        ways to remove duplicates: *min*, *max*, or *mean*, which keep the minimal, maximal, 
-        or mean of the duplicate records. The options are the same as how you deal with duplicates
-        in the TLFB data. Calling this function will return the duplicate records.
-        ```python
-        # Check only, no actions for removing duplicates
-        visit_data.check_duplicates(None)
-        
-        # Check and remove duplicates by keeping the minimal
-        visit_data.check_duplicates("min")
-        
-        # Check and remove duplicates by keeping the maximal
-        visit_data.check_duplicates("max")
-        
-        # Check and remove duplicates by keeping the computed mean (all originals will be removed)
-        visit_data.check_duplicates("mean")
-        
-        # Check and remove all duplicates
-        visit_data.check_duplicates(False)
-        ```
-        
-        #### 3e. Recode outliers (optional)
-        Those values outside the specified range are considered outliers. The syntax and usage is
-        the same as what you deal with the TLFB dataset
-        ```python
-        # Set the minimal and maximal, and outliers will be removed by default
-        visit_data.recode_outliers("07/01/2000", "12/08/2020")
-        
-        # Set the minimal and maximal, but keep the outliers by replacing them with bounding values
-        visit_data.recode_outliers("07/01/2000", "12/08/2020", False)
-        ```
-        
-        #### 3f. Impute the missing visit data
-        To calculate the ITT abstinence, the visit data will be imputed for the missing records.
-        The program will first find the earliest visit date as the anchor visit, which should be 
-        non-missing for all subjects. Then it will calculate the difference in 
-        days between the later visits and the anchor visit. Based on these difference values, the
-        following two imputation options are available. The *"freq"* option will use the most
-        frequent difference value, which is the default option. The *"mean"* option will use the
-        mean difference value.
-        
-        |Imputation Mode | Parameters | Interpolated Values
-        |------------ | ------------- | -------------
-        |Frequent | freq | Reference visit’s date + The most frequent interval
-        |Mean | mean | Reference visit’s date + The mean interval 
-        |Dictionary | a dict object | Reference visit’s date + The specified days of interval
-        
-        Note. The reference visit is specified by the user, for which all subjects have valid dates. When it is not specified, the calculator will infer the earliest visit as the anchor visit.
-        
-        The following figure illustrates the different options for imputation. For the sake of a better illustration, the tables use the wide format of the visit data. You don't need to transform you visit data, and everything will be handled under the hood for you.
-        ![Alt text](/tests/visit_imputation_examples.png?raw=true "Visit Imputation Examples")
-        
-        
-        ```python
-        # Use the most frequent difference value between the missing visit and the anchor visit
-        visit_data.impute_data(impute="freq")
-        
-        # Use the mean difference value between the missing visit and the anchor visit
-        visit_data.impute_data(impute="mean")
-        
-        # Specify which visit should serve as the anchor or reference visit
-        visit_data.impute_data(anchor_visit=1)
-        ```
-        
-        ### 4. Calculate Abstinence
-        #### 4a. Create the abstinence calculator using the TLFB and visit data
-        To calculate abstinence, you instantiate the calculator by setting the TLFB and visit data. By default,
-        only those who have both TLFB and visit data will be scored.
-        ```python
-        abst_cal = AbstinenceCalculator(tlfb_data, visit_data)
-        ```
-        
-        #### 4b. Check data availability (optional)
-        You can find out how many subjects have the TLFB data and how many have the visit data.
-        ```python
-        abst_cal.check_data_availability()
-        ```
-        The `check_data_availability` function returns the data availablility summary.
-        
-        #### 4c. Calculate abstinence
-        For all the function calls to calculate abstinence, you can request the calculation to be
-        ITT (intent-to-treat) or RO (responders-only). You can optionally specify the calculated
-        abstinence variable names. By default, the abstinence names will be inferred. Another shared
-        argument is whether you want to include the ending date. Notably, each method will generate
-        the abstinence dataset and a dataset logging first lapses that make a subject nonabstinent
-        for a particular abstinence calculation.
-        
-        |shared parameter | default value | implication
-        |----|----|----
-        |abst_var_names | 'infer' | calculated abstinence variables will have names generated automatically based on input
-        |including_end | False | the time window used for abstinence calculation will not include the end visit date
-        |mode | 'itt' | use ITT assumption, if set as 'ro', the responders-only assumption will be used
-        
-        ##### Continuous abstinence
-        To calculate the continuous abstinence, you need to specify the visit when the window starts
-        and the visit when the window ends. To provide greater flexibility, you can specify a series
-        of visits to generate multiple time windows.
-        ```python
-        # Calculate only one window
-        abst_df, lapse_df = abst_cal.abstinence_cont(2, 5)
-        
-        # Calculate two windows
-        abst_df, lapse_df = abst_cal.abstinence_cont(2, [5, 6])
-        
-        # Calculate three windows with abstinence names specified
-        abst_df, lapse_df = abst_cal.abstinence_cont(2, [5, 6, 7], ["abst_var1", "abst_var2", "abst_var3"])
-        ```
-        
-        ##### Point-prevalence abstinence
-        To calculate the point-prevalence abstinence, you need to specify the visits. You'll need to
-        specify the number of days preceding the time points. To provide greater flexibility, you
-        can specify multiple visits and multiple numbers of days.
-        ```python
-        # Calculate only one time point, 7-d point-prevalence
-        abst_df, lapse_df = abst_cal.abstinence_pp(5, 7)
-        
-        # Calculate multiple time points, multiple day conditions
-        abst_df, lapse_df = abst_cal.abstinence_pp([5, 6], [7, 14, 21, 28])
-        ```
-        
-        ##### Prolonged abstinence
-        To calculate the prolonged abstinence, you need to specify the quit visit and the number of
-        days for the grace period (the default length is 14 days). You can calculate abstinence for
-        multiple time points. There are several options regarding how a lapse is defined. See below
-        for some examples.
-        ```python
-        # Lapse isn't allowed
-        abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], False)
-        
-        # Lapse is defined as exceeding a defined amount of substance use
-        abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs')
-        
-        # Lapse is defined as exceeding a defined number of substance use days
-        abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '3 days')
-        
-        # Lapse is defined as exceeding a defined amount of substance use over a time window
-        abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs/7 days')
-        
-        # Lapse is defined as exceeding a defined number of substance use days over a time window
-        abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '3 days/7 days')
-        
-        # Combination of these criteria
-        abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], ('5 cigs', '3 days/7 days'))
-        ```
-        
-        #### 4d. Responders-only abstinence calculation
-        By default, the calculation of the above-mentioned abstinence is based on the ITI assumption. To calculate responders-only abstinence, you need to set the mode parameter to "ro" when you call these calculation-related functions.
-        ```python
-        abst_cal.abstinence_pp(5, 7, mode="ro")
-        ```
-        The above function call will calculate visit=5's 7-day point-prevalance abstinence with the assumption of responders-only. Under the hood, the calculator will consider abstinent only if 1) the subject had 7 TLFB data records before v5 2) the subject did not smoke at all in these 7 days. If a subject had less than 7 TLFB data records before v5, he or she is considered a non-responder, and the abstinence outcome will be N/A. If a subject had 7 TLFB data records and smoked any day, he or she is considered non-abstinent.
-        
-        ### 5. Output Datasets
-        #### 5a. The abstinence datasets
-        To output the abstinence datasets that you have created from calling the abstinence calculation
-        methods, you can use the following method to create a combined dataset, something like below.
-        
-        id | itt_abst_cont_v5_v2 | itt_abst_cont_v6_v2 | itt_abst_pp7_v5 | itt_abst_pp7_v6
-        ------------ | ------------- | ------------- | ------------ | -------------
-        1000 | 1 | 1 | 1 | 1
-        1001 | 1 | 0 | 1 | 0
-        1002 | 1 | 1 | 1 | 1
-        1003 | 0 | 0 | 1 | 1
-        1004 | 0 | 0 | 1 | 0 
-        1005 | 0 | 0 | 0 | 1
-        ```python
-        # The output data will merge these individual DataFrame objects, and save it to the file that you specify.
-        abst_cal.merge_abst_data([abst_df0, abst_df1, abst_df2], "merged_abstinence_data.csv")
-        
-        # Merge DataFrame objects only, no data will be saved to your computer
-        abst_cal.merge_abst_data([abst_df0, abst_df1, abst_df2])
-        ```
-        #### 5b. The lapse datasets
-        To output the lapse datasets that you have created from calling the abstinence calculation
-        methods, you can use the following method to create a combined dataset, something like below.
-        
-        id | date | amount | abst_name
-        ------------ | ------------- | ------------- | -------------
-        1000 | 02/03/2019 | 10 | itt_abst_cont_v5
-        1001 | 03/05/2019 | 8 | itt_abst_cont_v5
-        1002 | 04/06/2019 | 12 | itt_abst_cont_v5
-        1000 | 02/06/2019 | 9 | itt_abst_cont_v6
-        1001 | 04/07/2019 | 10 | itt_abst_cont_v6
-        1002 | 05/08/2019 | 8 | itt_abst_cont_v6
-        ```python
-        # The output data will merge these individual DataFrame objects, and save it to the file that you specify.
-        abst_cal.merge_lapse_data([lapse_df0, lapse_df1, lapse_df2], "merged_lapse_data.csv")
-        
-        # Merge DataFrame objects only, no data will be saved to your computer
-        abst_cal.merge_abst_data([abst_df0, abst_df1, abst_df2])
-        ```
-        
-        ## Additional Features
-        ### I. Integration of Biochemical Verification Data
-        If your study has collected biochemical verification data, such as carbon monoxide for smoking or breath alcohol 
-        concentration for alcohol intervention, these biochemical data can be integrated into the TLFB data. In this way,
-        non-honest reporting can be identified (e.g., self-reported of no use, but biochemically un-verified), the 
-        self-reported value will be overridden, and the updated record will be used in later abstinence calculation.
-        
-        The following code shows you a possible work flow. Please note that the biochemical measures dataset should have the 
-        same data structure as you TLFB dataset. In other words, it should have three columns: __*id*__, __*date*__, and 
-        __*amount*__. The biochemical data model shares the same data model with the TLFB data, both of which uses the
-        TLFBData class.
-        __Note:__ If day counters are used for the date column, please set `use_raw_date` to `True` when you create the `biochemical_data` variable below.
-        
-        #### Ia. Prepare the Biochemical Dataset
-        A key operation to prepare the biochemical dataset is to interpolate extra meaningful records based on the exiting 
-        records using the `interpolate_biochemical_data` function, as shown below.
-        ```python
-        # First read the biochemical verification data
-        biochemical_data = TLFBData("test_co.csv", included_subjects=included_subjects, abst_cutoff=4)
-        biochemical_data.profile_data()
-        
-        # Interpolate biochemical records based on the half-life
-        biochemical_data.interpolate_biochemical_data(half_life_in_days=0.5, maximum_days_to_interpolate=1)
-        # half_life_in_days: the half life of the biochemical measure in days
-        # maximum_days_to_interpolate: the maximum number of days to interpolate before the measurement day
-        
-        # Other data cleaning steps
-        biochemical_data.drop_na_records()
-        biochemical_data.check_duplicates()
-        ```
-        
-        #### Ib. Integrate the Biochemical Dataset with the TLFB data
-        The following code shows you how the integration can be performed. Everything else stays the same, except that in the
-        `impute_data` method, you need to **specify the `biochemical_data` argument**.
-        ```python
-        tlfb_data = TLFBData("test_tlfb.csv", included_subjects=included_subjects)
-        tlfb_sample_summary, tlfb_subject_summary, tlfb_hist_plot = tlfb_data.profile_data()
-        tlfb_data.drop_na_records()
-        tlfb_data.check_duplicates()
-        tlfb_data.recode_data()
-        tlfb_data.impute_data(biochemical_data=biochemical_data)
-        ```
-        
-        ### II. Calculate Retention Rates
-        You can also calculate the retention rate with the visit data with a simple function call, as shown below. 
-        If a filepath is specified, it will write to a file.
-        ```python
-        # Just show the retention rates results
-        visit_data.get_retention_rates()
-        
-        # Write the retention rates to an external file
-        visit_data.get_retention_rates('retention_rates.csv')
-        ```
-        
-        ### III. Calculate Abstinence Rates
-        You can calculate the computed abstinence by providing the list of pandas DataFrame objects.
-        ```python
-        # Calculate abstinence by various definitions
-        abst_pp, lapses_pp = abst_cal.abstinence_pp([9, 10], 7, including_end=True)
-        abst_pros, lapses_pros = abst_cal.abstinence_prolonged(4, [9, 10], '5 cigs')
-        abst_prol, lapses_prol = abst_cal.abstinence_prolonged(4, [9, 10], False)
-        
-        # Calculate abstinence rates for each
-        abst_cal.calculate_abstinence_rates([abst_pp, abst_pros, abst_prol])
-        abst_cal.calculate_abstinence_rates([abst_pp, abst_pros, abst_prol], 'abstinence_results.csv')
-        ```
-        It will create the following DataFrame as the output. If a filepath is specified, it will write to a file.
-        
-        |Abstinence Name | Abstinence Rate
-        |------------ | -------------
-        |itt_pp7_v9                  | 0.159091
-        |itt_pp7_v10                 | 0.170455
-        |itt_prolonged_5_cigs_v9     | 0.159091
-        |itt_prolonged_5_cigs_v10    | 0.113636
-        |itt_prolonged_False_v9      | 0.102273
-        |itt_prolonged_False_v10     | 0.068182
-        
-        ### Pre-Processing Tools
-        #### Data Converision Tool (wide to long format)
-        The package is best to work with datasets in the long format. If your datasets are in the wide format (one subject per row with columns storing data), you can use the following function.
-        ```python
-        # import the module if you've not done this yet
-        from abstcal import abstcal_utils
-        
-        long_df = abstcal_utils.from_wide_to_long("filepath_to_wide.csv", data_source_type="tlfb", subject_col_name="id")
-        # data_source_type: specify the data source is tlfb or visit, using which the function will use the desired column names after the transformation
-        # subject_col_name: the original name for the subject column
-        ```
-        
-        The `from_wide_to_long` function will return the DataFrame in the long format with correctly named columns.
-        
-        #### Date Masking Tool
-        For privacy concerns, you may want to mask the dates in the datasets. To provide consistent mapping between all related datasets, you need to map TLFB, Visit, and Biochemical (optional) datasets altogether.
-        ```python
-        # Use a particular visit as reference (each subject's date for the visit will be used)
-        abstcal_utils.mask_dates("path_to_tlfb.csv", "path_to_bio.csv", "path_to_visit.csv", 0)
-        
-        # Use a date (mm/dd/yyyy) as reference for all subjects
-        abstcal_utils.mask_dates("path_to_tlfb.csv", "path_to_bio.csv", "path_to_visit.csv", "12/29/2020")
-        
-        # If you don't have biochemical data, please specify the second parameter as None
-        abstcal_utils.mask_dates("path_to_tlfb.csv", None, "path_to_visit.csv", 0)
-        ```
-        
-        The `mask_dates` function returns the masked datasets.
-        
-        #### Visit Date Creation Tool
-        Sometimes, we need to create extra "virtual visit" dates that use existing visits plus a specific number of days' difference. This is possible with that `add_additional_visit_dates` function.
-        ```python
-        abstcal_utils.add_additional_visit_dates("path_to_visit.csv", [('TQD', 'v0', 7), ('v7', 'v8', -5)], use_raw_date=True)
-        ```
-        
-        The above example will read the long-format visit data from the specified path and add two new visit variables. The first one will be named TQD, which is equal to each subject's v0 date plus 7 days, and the other will be named v7, which is each subject's v8 date plus -5 days. The `use_raw_date` parameter just specifies whether the visit data uses raw dates or day counters.
-        
-        
-        #### Output DataFrame to Files
-        Many of these data processing functions produce DataFrame objects as the return value. If you want to save these DataFrame objects to external files on your computer, use the `write_data_to_path` function.
-        ```python
-        abstcal_utils.write_data_to_path(df, "filepath_to_output.csv", index=False)
-        # index: when True, the output speadsheet will keep the index column, while False, it won't
-        ```
-        
-        
-        ## Questions or Comments
-        If you have any questions about this package or would like to contribute to this project, please feel free to leave comments here or
-        send me an email to ycui1@mdanderson.org.
-        
-        ## License
-        MIT License
-Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
 Requires-Python: >=3.6
 Description-Content-Type: text/markdown
+License-File: LICENSE.txt
+
+# Abstinence Calculator
+
+A Python package to calculate abstinence results using the timeline followback interview data
+
+## Installation
+### Use the package in Python
+Install the package using the pip tool. If you need instruction on how to install Python, you 
+can find information at the [Python](https://www.python.org/) website. The pip tool is the most 
+common Python package management tool, and you can find information about its use instruction at the 
+[pypa](https://pip.pypa.io/en/stable/installing/) website. The pip tool will be pre-installed
+if you download Python 3.6+ from [python.org](python.org) directly.
+
+Once your computer has Python and pip installed, 
+you can run the following command in your command line tool, which will install abstcal and its required 
+dependencies, mainly the [pandas](https://pandas.pydata.org/) (for data processing) and the 
+[streamlit](https://streamlit.io/) (for the web app development).
+
+```commandline
+pip install abstcal
+```
+
+If you're not familiar with Python coding, you can run the 
+[Jupyter Notebook](https://github.com/ycui1-mda/abstcal/blob/88543f99044dfd0566168e922bab3d81dfb76a14/tests/abstcal_use_example.ipynb) 
+included on this page on [Google Colab](https://colab.research.google.com), which is an online platform 
+to run your Python code remotely on a server hosted by Google without any cost. 
+With this option, you don't have to worry about installing Python and any Python packages on your local computer.
+
+### Web App Interface
+If you don't want to use the non-GUI environment, you can use the package's web app, please go to 
+[abstcal Hosted by Streamlit](https://share.streamlit.io/ycui1-mda/abstcal/abstcal/calculator_web_app.py). The web app provides the
+core functionalities of the package. You can find more detailed instructions on the web page.
+
+If you're concerned about data privacy and security associated with using the web app hosted online, you can use the 
+web app hosted locally on your computer. However, it requires the installation of Python and Python packages on your
+computer. Here's the overall instruction.
+1. Install Python 3.6+ on your computer ([Official Python Downloads](https://www.python.org/downloads/)).
+2. Install abstcal on your computer (Using the command line tool, run `pip install abstcal`).
+3. Download the entire package's zip file from the GitHub page.
+4. Unzip the file to the desired directory on your computer.
+5. Locate the web app file named _calculator_web_app.py_ and get its full path.   
+6. Launch the web app locally (Using your command line tool, run `streamlit run the_full_path_to_the_web_app`.
+
+*********
+
+## Overview of the Package
+This package is developed to score abstinence using the Timeline Followback (TLFB) and 
+visit data in clinical substance use research. It provides functionalities to preprocess 
+the datasets to remove duplicates and outliers. In addition, it can impute missing data 
+using various criteria. 
+
+It supports the calculation of abstinence of varied definitions, 
+including continuous, point-prevalence, and prolonged using either intent-to-treat (ITT) 
+or responders-only assumption. It can optionally integrate biochemical verification data.
+
+*********
+## Required Datasets
+#### The Timeline Followback Data (Required)
+The dataset should have three columns: __*id*__, 
+__*date*__, and __*amount*__. The id column stores the subject ids, each of which should 
+uniquely identify a study subject. The date column stores the dates when daily substance 
+uses are collected. The date column can also use day counters using an anchor date for 
+each subject. The amount column stores substance uses for each day.
+
+##### Using the raw date
+id | date | amount 
+------------ | ------------- | -------------
+1000 | 02/03/2019 | 10
+1000 | 02/04/2019 | 8
+1000 | 02/05/2019 | 12
+1000 | 02/06/2019 | 9
+1000 | 02/07/2019 | 10
+1000 | 02/08/2019 | 8
+
+##### Using the day counter
+id | date | amount 
+------------ | ------------- | -------------
+1000 | 1 | 10
+1000 | 2 | 8
+1000 | 3 | 12
+1000 | 4 | 9
+1000 | 5 | 10
+1000 | 6 | 8
+
+***
+
+#### The Biochemical Measures Dataset (Optional)
+The dataset should have three columns: __*id*__, 
+__*date*__, and __*amount*__. The id column stores the subject ids, each of which should 
+uniquely identify a study subject. The date column stores the dates when daily substance 
+uses are collected. Similar to the TLFB dataset, the biochemical measures dataset can also
+use day counters for the date column. The amount column stores the biochemical measures 
+that verify substance use status.
+
+id | date | amount 
+------------ | ------------- | -------------
+1000 | 02/03/2019 | 4
+1000 | 02/11/2019 | 6
+1000 | 03/04/2019 | 10
+1000 | 03/22/2019 | 8
+1000 | 03/28/2019 | 6
+1000 | 04/15/2019 | 5
+
+***
+
+#### The Visit Data (Required)
+It needs to be in one of the following two formats.
+**The long format.** The dataset should have three columns: __*id*__, __*visit*__, 
+and __*date*__. The id column stores the subject ids, each of which should uniquely 
+identify a study subject. The visit column stores the visits. The date column stores
+the dates for the visits.
+
+***
+
+id | visit | date 
+------------ | ------------- | -------------
+1000 | 0 | 02/03/2019
+1000 | 1 | 02/10/2019
+1000 | 2 | 02/17/2019
+1000 | 3 | 03/09/2019 
+1000 | 4 | 04/07/2019 
+1000 | 5 | 05/06/2019
+
+**The wide format.** The dataset should have the id column and additional columns 
+with each representing a visit.
+
+id | v0 | v1 | v2 | v3 | v4 | v5
+----- | ----- | ----- | ----- | ----- | ----- | ----- |
+1000 | 02/03/2019 | 02/10/2019 | 02/17/2019 | 03/09/2019 | 04/07/2019 | 05/06/2019
+1001 | 02/05/2019 | 02/13/2019 | 02/20/2019 | 03/11/2019 | 04/06/2019 | 05/09/2019
+
+***
+
+For both formats, the date values can be day counters, just as the TLFB dataset.
+
+***
+
+## Supported Abstinence Definitions
+The following abstinence definitions have both calculated as the intent-to-treat (ITT) 
+or responders-only options. By default, the ITT option is used.
+1. **Continuous Abstinence**: No substance use in the defined time window. Usually, it 
+starts with the target quit date.
+2. **Point-Prevalence Abstinence**: No substance use in the defined time window preceding 
+the assessment time point.
+3. **Prolonged Abstinence Without Lapses**: No substance use after the grace period (usually 
+2 weeks) until the assessment time point.
+4. **Prolonged Abstinence With Lapses**: Lapses are allowed after the grace period 
+until the assessment time point.
+
+*********
+
+## Use Example
+Once you have installed abstcal and prepared your datasets according to the format 
+requirements listed above, you can start to use the tool.
+
+### 1. Import the Package
+```python
+from abstcal import TLFBData, VisitData, AbstinenceCalculator, abstcal_utils
+```
+The `abstcal_utils` is an optional module, which provides some utility functions as
+discussed in the Optional Features section.
+
+### 2. Process the TLFB Data
+#### 2a. Read the TLFB data
+You can either specify the full path of the TLFB data or just the filename if the dataset 
+is in your current work directory. Supported file formats include comma-separated (.csv), 
+tab-delimited (.txt), and Excel spreadsheets (.xls, .xlsx).
+
+__Note:__ If the date column uses day counters, don't forget to set `False` to the `use_raw_date` parameter.
+
+```python
+# Use the default settings
+tlfb_data = TLFBData('path_to_tlfb.csv')
+
+# Use additional parameters
+tlfb_data = TLFBData('path_to_tlfb.csv', abst_cutoff=0, included_subjects="all", use_raw_date=True)
+# abst_cutoff: set the custom abstinence cutoff, default=0
+# included_subjects: set the list of subject ids to include in the processed data, default using all subjects
+# use_raw_date: the TLFB dataset uses the raw dates for the date column when True, if the date column uses day counters, set it to False
+```
+
+#### 2b. Profile the TLFB data
+In this step, you will see a report of the data summary, such as the number of records, 
+the number of subjects, and any applicable abnormal data records, including duplicates 
+and outliers. In terms of outliers, you can specify the minimal and maximal values for 
+the substance use amounts. Those values outside the range are considered outliers 
+and are shown in the summary report.
+```python
+# No outlier identification
+tlfb_data.profile_data()
+
+# Identify outliers that are outside of the range
+tlfb_data.profile_data(0, 100)
+
+# Use the returned values of the function
+tlfb_summary_overall, tlfb_summary_subject, tlfb_hist_plot = tlfb_data.profile_data()
+# tlfb_summary_overall: the overall summary of the TLFB data
+# tlfb_summary_subject: the data summary by subject
+# tlfb_hist_plot: a histogram of the TLFB amount records
+
+# to show the histogram, you can use the utility function, which is just a convenience method to use matplotlib to show the image
+abstcal_utils.show_figure()
+```
+
+#### 2c. Drop data records with any missing values
+Those records with missing *id*, *date*, or *amount* will be removed. The number of removed
+records will be reported.
+```python
+tlfb_data.drop_na_records()
+```
+
+#### 2d. Check and remove any duplicate records
+Duplicate records are identified based on __*id*__ and __*date*__. There are different 
+ways to remove duplicates: *min*, *max*, or *mean*, which keep the minimal, maximal, 
+or mean of the duplicate records. You can also have the options to remove all duplicates. 
+You can also simply view the duplicates and handle these duplicates manually.
+```python
+# Check only, no actions for removing duplicates
+tlfb_data.check_duplicates(None)
+
+# Check and remove duplicates by keeping the minimal
+tlfb_data.check_duplicates("min")
+
+# Check and remove duplicates by keeping the maximal
+tlfb_data.check_duplicates("max")
+
+# Check and remove duplicates by keeping the computed mean (all originals will be removed)
+tlfb_data.check_duplicates("mean")
+
+# Check and remove all duplicates
+tlfb_data.check_duplicates(False)
+```
+
+The `check_duplicates` function will return any duplicate records.
+
+#### 2e. Recode outliers (optional)
+Those values outside the specified range are considered outliers. All these outliers will 
+be removed by default. However, if the users set the drop_outliers argument to be False, 
+the values lower than the minimal will be recoded as the minimal, while the values higher 
+than the maximal will be recoded as the maximal.
+
+```python
+# Set the minimal and maximal values for outlier detection, by default, the outliers will be dropped
+tlfb_data.recode_outliers(0, 100)
+
+# Alternatively, we can recode outliers by replacing them with bounding values
+tlfb_data.recode_outliers(0, 100, False)
+```
+
+The `recode_outliers` function returns the summary of the identified outliers.
+
+#### 2f. Impute the missing TLFB data
+To calculate the ITT abstinence, the TLFB data will be imputed for the missing records.
+All contiguous missing intervals will be identified. Each of the intervals will be imputed
+based on the two values, the one before and the one after the interval. 
+
+You can choose to impute the missing values for the interval using the mean of these two values or
+interpolate the missing values for the interval using the linear values generated from the
+two values. Alternatively, you can specify a fixed value, which will be used to impute all
+missing values.
+
+|Imputation Mode | Parameters | Imputed Values 
+|------------ | ------------- | -------------
+|Uniform | uniform | Q<sub>t</sub> = (Q<sub>0</sub> + Q<sub>1</sub>) / 2
+|Linear | linear | Q<sub>t</sub> = m * (t - t<sub>0</sub>) + Q<sub>0</sub> where m is (Q<sub>1</sub> - Q<sub>0</sub>) / (t<sub>1</sub> - t<sub>0</sub>)
+|Fixed | a numeric value | Use the numeric value to fill all missing gaps
+
+Note. Q<sub>0</sub> and Q<sub>1</sub> represent the substance use amount before (t<sub>0</sub>) and after (t<sub>1</sub>) the missing TLFB interval. Q<sub>t</sub> represents the interpolated substance use amount at the time t.
+
+The following figure shows you some examples of these different imputation modes.
+![Alt text](/tests/TLFB_imputation_examples.png?raw=true "TLFB Imputation Examples")
+
+```python
+# Use the mean
+tlfb_data.impute_data("uniform")
+
+# Use the linear interpolation
+tlfb_data.impute_data("linear")
+
+# Use a fixed value, whichever is appropriate to your research question
+tlfb_data.impute_data(1)
+tlfb_data.impute_data(5)
+
+# A calling that uses all possible features
+tlfb_data.impute_data("linear", last_record_action="ffill", maximum_allowed_gap_days=30, biochemical_data=bio_data, overridden_amount="infer")
+# last_record_action: how you interpolate TLFB records using each subject's last record, default="ffill", fill forward
+# maximum_allowed_gap_days: the maximum allowed days for TLFB data imputation
+# biochemical_data: the biochemical dataset for abstinence verification (details will be provided later)
+# overridden_amount: with the presence of biochemical data, how false negative TLFB records will be overridden
+```
+
+### 3. Process the Visit Data
+#### 3a. Read the visit data
+Similar to reading the TLFB data, you can read files in .csv, .txt, .xls, or .xlsx format.
+It's also supported if your visit dataset is in the univariate format, which means that
+each subject has only one row of data, and the columns are the visits and their dates.
+
+Importantly, it will also detect if any subjects have their visits with the dates that
+are out of the order. By default, the order is inferred using the numeric or alphabetic 
+order of the visits. These records with incorrect data may result in wrong
+abstinence calculations.
+```python
+# Read the visit data in the long format (the default option)
+visit_data = VisitData("file_path.csv")
+
+# Read the visit data in the wide format
+visit_data = VisitData("file_path.csv", "wide")
+
+# Read the visit data and specify the order of the visit
+visit_data = VisitData("file_path.csv", expected_ordered_visits=[1, 2, 3, 5, 6])
+```
+
+__Note:__ The name of this visit dataset is nominal. It does not only refer to actual in-person and telephone visits, it also refers to other important milestones or timepoints (e.g., Target Quit Day) in clinical cessation trials. Thus, the visit dataset should incluse all these visits that you need to calculate abstinence. Relatedly, this package has a pre-processing tool that allows you to create "virtual" visits based on existing visits. You can find the instruction on this feature at the end of this page.
+
+If you prefer referring to the visit data as time points or milestones, you can do so by creating the visit dataset as following:
+```python
+# If you prefer using time points
+timepoint_data = TimePointData("file_path.csv")
+
+# If you prefer using milestones
+milestone_data = MilestoneData("file_path.csv")
+```
+
+__Note:__ If the date column uses the day counters, you'll have to set the `use_raw_date` to `False`, just as processing the TLFB data.
+```python
+# When the dates are day counters
+visit_data = VisitData("file_path.csv", expected_ordered_visits=[1, 2, 3, 5, 6], use_raw_data=False)
+```
+
+#### 3b. Profile the visit data
+You will see a report of the data summary, such as the number of records, the number of 
+subjects, and any applicable abnormal data records, including duplicates and outliers. 
+In terms of outliers, you can specify the minimal and maximal values for the dates. The
+dates will be inferred from strings. Please use the format *mm/dd/yyyy*.
+```python
+# No outlier identification
+visit_data.profile_data()
+
+# Outlier identification
+visit_data.profile_data("07/01/2000", "12/08/2020")
+
+# Use the returned values of the function
+visit_summary_overall, visit_summary_subject, visit_hist_plot = visit_data.profile_data()
+# visit_summary_overall: the overall summary of the TLFB data
+# visit_summary_subject: the data summary by subject
+# visit_hist_plot: a histogram of the visit records
+
+# to show the histogram, you can use the utility function, which is just a convenience method to use matplotlib to show the image
+abstcal_utils.show_figure()
+```
+
+#### 3c. Drop data records with any missing values 
+Those records with missing *id*, *visit*, or *date* will be removed. The number of removed
+records will be reported.
+```python
+visit_data.drop_na_records()
+```
+
+#### 3d. Check and remove any duplicate records
+Duplicate records are identified based on __*id*__ and __*visit*__. There are different 
+ways to remove duplicates: *min*, *max*, or *mean*, which keep the minimal, maximal, 
+or mean of the duplicate records. The options are the same as how you deal with duplicates
+in the TLFB data. Calling this function will return the duplicate records.
+```python
+# Check only, no actions for removing duplicates
+visit_data.check_duplicates(None)
+
+# Check and remove duplicates by keeping the minimal
+visit_data.check_duplicates("min")
+
+# Check and remove duplicates by keeping the maximal
+visit_data.check_duplicates("max")
+
+# Check and remove duplicates by keeping the computed mean (all originals will be removed)
+visit_data.check_duplicates("mean")
+
+# Check and remove all duplicates
+visit_data.check_duplicates(False)
+```
+
+#### 3e. Recode outliers (optional)
+Those values outside the specified range are considered outliers. The syntax and usage is
+the same as what you deal with the TLFB dataset
+```python
+# Set the minimal and maximal, and outliers will be removed by default
+visit_data.recode_outliers("07/01/2000", "12/08/2020")
+
+# Set the minimal and maximal, but keep the outliers by replacing them with bounding values
+visit_data.recode_outliers("07/01/2000", "12/08/2020", False)
+```
+
+#### 3f. Impute the missing visit data
+To calculate the ITT abstinence, the visit data will be imputed for the missing records.
+The program will first find the earliest visit date as the anchor visit, which should be 
+non-missing for all subjects. Then it will calculate the difference in 
+days between the later visits and the anchor visit. Based on these difference values, the
+following two imputation options are available. The *"freq"* option will use the most
+frequent difference value, which is the default option. The *"mean"* option will use the
+mean difference value.
+
+|Imputation Mode | Parameters | Interpolated Values
+|------------ | ------------- | -------------
+|Frequent | freq | Reference visit’s date + The most frequent interval
+|Mean | mean | Reference visit’s date + The mean interval 
+|Dictionary | a dict object | Reference visit’s date + The specified days of interval
+
+Note. The reference visit is specified by the user, for which all subjects have valid dates. When it is not specified, the calculator will infer the earliest visit as the anchor visit.
+
+The following figure illustrates the different options for imputation. For the sake of a better illustration, the tables use the wide format of the visit data. You don't need to transform you visit data, and everything will be handled under the hood for you.
+![Alt text](/tests/visit_imputation_examples.png?raw=true "Visit Imputation Examples")
+
+
+```python
+# Use the most frequent difference value between the missing visit and the anchor visit
+visit_data.impute_data(impute="freq")
+
+# Use the mean difference value between the missing visit and the anchor visit
+visit_data.impute_data(impute="mean")
+
+# Specify which visit should serve as the anchor or reference visit
+visit_data.impute_data(anchor_visit=1)
+```
+
+### 4. Calculate Abstinence
+#### 4a. Create the abstinence calculator using the TLFB and visit data
+To calculate abstinence, you instantiate the calculator by setting the TLFB and visit data. By default,
+only those who have both TLFB and visit data will be scored.
+```python
+abst_cal = AbstinenceCalculator(tlfb_data, visit_data)
+```
+
+#### 4b. Check data availability (optional)
+You can find out how many subjects have the TLFB data and how many have the visit data.
+```python
+abst_cal.check_data_availability()
+```
+The `check_data_availability` function returns the data availablility summary.
+
+#### 4c. Calculate abstinence
+For all the function calls to calculate abstinence, you can request the calculation to be
+ITT (intent-to-treat) or RO (responders-only). You can optionally specify the calculated
+abstinence variable names. By default, the abstinence names will be inferred. Another shared
+argument is whether you want to include the ending date. Notably, each method will generate
+the abstinence dataset and a dataset logging first lapses that make a subject nonabstinent
+for a particular abstinence calculation.
+
+|shared parameter | default value | implication
+|----|----|----
+|abst_var_names | 'infer' | calculated abstinence variables will have names generated automatically based on input
+|including_end | False | the time window used for abstinence calculation will not include the end visit date
+|mode | 'itt' | use ITT assumption, if set as 'ro', the responders-only assumption will be used
+
+##### Continuous abstinence
+To calculate the continuous abstinence, you need to specify the visit when the window starts
+and the visit when the window ends. To provide greater flexibility, you can specify a series
+of visits to generate multiple time windows.
+```python
+# Calculate only one window
+abst_df, lapse_df = abst_cal.abstinence_cont(2, 5)
+
+# Calculate two windows
+abst_df, lapse_df = abst_cal.abstinence_cont(2, [5, 6])
+
+# Calculate three windows with abstinence names specified
+abst_df, lapse_df = abst_cal.abstinence_cont(2, [5, 6, 7], ["abst_var1", "abst_var2", "abst_var3"])
+```
+
+##### Point-prevalence abstinence
+To calculate the point-prevalence abstinence, you need to specify the visits. You'll need to
+specify the number of days preceding the time points. To provide greater flexibility, you
+can specify multiple visits and multiple numbers of days.
+```python
+# Calculate only one time point, 7-d point-prevalence
+abst_df, lapse_df = abst_cal.abstinence_pp(5, 7)
+
+# Calculate multiple time points, multiple day conditions
+abst_df, lapse_df = abst_cal.abstinence_pp([5, 6], [7, 14, 21, 28])
+```
+
+##### Prolonged abstinence
+To calculate the prolonged abstinence, you need to specify the quit visit and the number of
+days for the grace period (the default length is 14 days). You can calculate abstinence for
+multiple time points. There are several options regarding how a lapse is defined. See below
+for some examples.
+```python
+# Lapse isn't allowed
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], False)
+
+# Lapse is defined as exceeding a defined amount of substance use
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs')
+
+# Lapse is defined as exceeding a defined number of substance use days
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '3 days')
+
+# Lapse is defined as exceeding a defined amount of substance use over a time window
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '5 cigs/7 days')
+
+# Lapse is defined as exceeding a defined number of substance use days over a time window
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], '3 days/7 days')
+
+# Combination of these criteria
+abst_df, lapse_df = abst_cal.abstinence_prolonged(3, [5, 6], ('5 cigs', '3 days/7 days'))
+```
+
+#### 4d. Responders-only abstinence calculation
+By default, the calculation of the above-mentioned abstinence is based on the ITI assumption. To calculate responders-only abstinence, you need to set the mode parameter to "ro" when you call these calculation-related functions.
+```python
+abst_cal.abstinence_pp(5, 7, mode="ro")
+```
+The above function call will calculate visit=5's 7-day point-prevalance abstinence with the assumption of responders-only. Under the hood, the calculator will consider abstinent only if 1) the subject had 7 TLFB data records before v5 2) the subject did not smoke at all in these 7 days. If a subject had less than 7 TLFB data records before v5, he or she is considered a non-responder, and the abstinence outcome will be N/A. If a subject had 7 TLFB data records and smoked any day, he or she is considered non-abstinent.
+
+### 5. Output Datasets
+#### 5a. The abstinence datasets
+To output the abstinence datasets that you have created from calling the abstinence calculation
+methods, you can use the following method to create a combined dataset, something like below.
+
+id | itt_abst_cont_v5_v2 | itt_abst_cont_v6_v2 | itt_abst_pp7_v5 | itt_abst_pp7_v6
+------------ | ------------- | ------------- | ------------ | -------------
+1000 | 1 | 1 | 1 | 1
+1001 | 1 | 0 | 1 | 0
+1002 | 1 | 1 | 1 | 1
+1003 | 0 | 0 | 1 | 1
+1004 | 0 | 0 | 1 | 0 
+1005 | 0 | 0 | 0 | 1
+```python
+# The output data will merge these individual DataFrame objects, and save it to the file that you specify.
+abst_cal.merge_abst_data([abst_df0, abst_df1, abst_df2], "merged_abstinence_data.csv")
+
+# Merge DataFrame objects only, no data will be saved to your computer
+abst_cal.merge_abst_data([abst_df0, abst_df1, abst_df2])
+```
+#### 5b. The lapse datasets
+To output the lapse datasets that you have created from calling the abstinence calculation
+methods, you can use the following method to create a combined dataset, something like below.
+
+id | date | amount | abst_name
+------------ | ------------- | ------------- | -------------
+1000 | 02/03/2019 | 10 | itt_abst_cont_v5
+1001 | 03/05/2019 | 8 | itt_abst_cont_v5
+1002 | 04/06/2019 | 12 | itt_abst_cont_v5
+1000 | 02/06/2019 | 9 | itt_abst_cont_v6
+1001 | 04/07/2019 | 10 | itt_abst_cont_v6
+1002 | 05/08/2019 | 8 | itt_abst_cont_v6
+```python
+# The output data will merge these individual DataFrame objects, and save it to the file that you specify.
+abst_cal.merge_lapse_data([lapse_df0, lapse_df1, lapse_df2], "merged_lapse_data.csv")
+
+# Merge DataFrame objects only, no data will be saved to your computer
+abst_cal.merge_abst_data([abst_df0, abst_df1, abst_df2])
+```
+
+## Additional Features
+### I. Integration of Biochemical Verification Data
+If your study has collected biochemical verification data, such as carbon monoxide for smoking or breath alcohol 
+concentration for alcohol intervention, these biochemical data can be integrated into the TLFB data. In this way,
+non-honest reporting can be identified (e.g., self-reported of no use, but biochemically un-verified), the 
+self-reported value will be overridden, and the updated record will be used in later abstinence calculation.
+
+The following code shows you a possible work flow. Please note that the biochemical measures dataset should have the 
+same data structure as you TLFB dataset. In other words, it should have three columns: __*id*__, __*date*__, and 
+__*amount*__. The biochemical data model shares the same data model with the TLFB data, both of which uses the
+TLFBData class.
+__Note:__ If day counters are used for the date column, please set `use_raw_date` to `True` when you create the `biochemical_data` variable below.
+
+#### Ia. Prepare the Biochemical Dataset
+A key operation to prepare the biochemical dataset is to interpolate extra meaningful records based on the exiting 
+records using the `interpolate_biochemical_data` function, as shown below.
+```python
+# First read the biochemical verification data
+biochemical_data = TLFBData("test_co.csv", included_subjects=included_subjects, abst_cutoff=4)
+biochemical_data.profile_data()
+
+# Interpolate biochemical records based on the half-life
+biochemical_data.interpolate_biochemical_data(half_life_in_days=0.5, maximum_days_to_interpolate=1)
+# half_life_in_days: the half life of the biochemical measure in days
+# maximum_days_to_interpolate: the maximum number of days to interpolate before the measurement day
+
+# Other data cleaning steps
+biochemical_data.drop_na_records()
+biochemical_data.check_duplicates()
+```
+
+#### Ib. Integrate the Biochemical Dataset with the TLFB data
+The following code shows you how the integration can be performed. Everything else stays the same, except that in the
+`impute_data` method, you need to **specify the `biochemical_data` argument**.
+```python
+tlfb_data = TLFBData("test_tlfb.csv", included_subjects=included_subjects)
+tlfb_sample_summary, tlfb_subject_summary, tlfb_hist_plot = tlfb_data.profile_data()
+tlfb_data.drop_na_records()
+tlfb_data.check_duplicates()
+tlfb_data.recode_data()
+tlfb_data.impute_data(biochemical_data=biochemical_data)
+```
+
+### II. Calculate Retention Rates
+You can also calculate the retention rate with the visit data with a simple function call, as shown below. 
+If a filepath is specified, it will write to a file.
+```python
+# Just show the retention rates results
+visit_data.get_retention_rates()
+
+# Write the retention rates to an external file
+visit_data.get_retention_rates('retention_rates.csv')
+```
+
+### III. Calculate Abstinence Rates
+You can calculate the computed abstinence by providing the list of pandas DataFrame objects.
+```python
+# Calculate abstinence by various definitions
+abst_pp, lapses_pp = abst_cal.abstinence_pp([9, 10], 7, including_end=True)
+abst_pros, lapses_pros = abst_cal.abstinence_prolonged(4, [9, 10], '5 cigs')
+abst_prol, lapses_prol = abst_cal.abstinence_prolonged(4, [9, 10], False)
+
+# Calculate abstinence rates for each
+abst_cal.calculate_abstinence_rates([abst_pp, abst_pros, abst_prol])
+abst_cal.calculate_abstinence_rates([abst_pp, abst_pros, abst_prol], 'abstinence_results.csv')
+```
+It will create the following DataFrame as the output. If a filepath is specified, it will write to a file.
+
+|Abstinence Name | Abstinence Rate
+|------------ | -------------
+|itt_pp7_v9                  | 0.159091
+|itt_pp7_v10                 | 0.170455
+|itt_prolonged_5_cigs_v9     | 0.159091
+|itt_prolonged_5_cigs_v10    | 0.113636
+|itt_prolonged_False_v9      | 0.102273
+|itt_prolonged_False_v10     | 0.068182
+
+### Pre-Processing Tools
+#### Data Converision Tool (wide to long format)
+The package is best to work with datasets in the long format. If your datasets are in the wide format (one subject per row with columns storing data), you can use the following function.
+```python
+# import the module if you've not done this yet
+from abstcal import abstcal_utils
+
+long_df = abstcal_utils.from_wide_to_long("filepath_to_wide.csv", data_source_type="tlfb", subject_col_name="id")
+# data_source_type: specify the data source is tlfb or visit, using which the function will use the desired column names after the transformation
+# subject_col_name: the original name for the subject column
+```
+
+The `from_wide_to_long` function will return the DataFrame in the long format with correctly named columns.
+
+#### Date Masking Tool
+For privacy concerns, you may want to mask the dates in the datasets. To provide consistent mapping between all related datasets, you need to map TLFB, Visit, and Biochemical (optional) datasets altogether.
+```python
+# Use a particular visit as reference (each subject's date for the visit will be used)
+abstcal_utils.mask_dates("path_to_tlfb.csv", "path_to_bio.csv", "path_to_visit.csv", 0)
+
+# Use a date (mm/dd/yyyy) as reference for all subjects
+abstcal_utils.mask_dates("path_to_tlfb.csv", "path_to_bio.csv", "path_to_visit.csv", "12/29/2020")
+
+# If you don't have biochemical data, please specify the second parameter as None
+abstcal_utils.mask_dates("path_to_tlfb.csv", None, "path_to_visit.csv", 0)
+```
+
+The `mask_dates` function returns the masked datasets.
+
+#### Visit Date Creation Tool
+Sometimes, we need to create extra "virtual visit" dates that use existing visits plus a specific number of days' difference. This is possible with that `add_additional_visit_dates` function.
+```python
+abstcal_utils.add_additional_visit_dates("path_to_visit.csv", [('TQD', 'v0', 7), ('v7', 'v8', -5)], use_raw_date=True)
+```
+
+The above example will read the long-format visit data from the specified path and add two new visit variables. The first one will be named TQD, which is equal to each subject's v0 date plus 7 days, and the other will be named v7, which is each subject's v8 date plus -5 days. The `use_raw_date` parameter just specifies whether the visit data uses raw dates or day counters.
+
+
+#### Output DataFrame to Files
+Many of these data processing functions produce DataFrame objects as the return value. If you want to save these DataFrame objects to external files on your computer, use the `write_data_to_path` function.
+```python
+abstcal_utils.write_data_to_path(df, "filepath_to_output.csv", index=False)
+# index: when True, the output speadsheet will keep the index column, while False, it won't
+```
+
+
+## Questions or Comments
+If you have any questions about this package or would like to contribute to this project, please feel free to leave comments here or
+send me an email to ycui1@mdanderson.org.
+
+## License
+MIT License

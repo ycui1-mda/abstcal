@@ -9,19 +9,27 @@ import pandas as pd
 import streamlit as st
 from abstcal import TLFBData, VisitData, AbstinenceCalculator, abstcal_utils
 
-get_saved_session = abstcal_utils.get_saved_session
+# get_saved_session = abstcal_utils.get_saved_session
 from_wide_to_long = abstcal_utils.from_wide_to_long
 mask_dates = abstcal_utils.mask_dates
 
 
-abstcal_version = '0.8'
-update_date = 'Mar 17, 2021'
+abstcal_version = '0.9'
+update_date = 'Mar 4, 2024'
 sidebar = st.sidebar
 supported_file_types = ["csv", "xls", "xlsx"]
 
 # Hide tracebacks
 # sys.tracebacklimit = 0
-session_state = get_saved_session(tlfb_data=None, visit_data=None)
+# session_state = get_saved_session(tlfb_data=None, visit_data=None)
+session_state = st.session_state
+
+if "tlfb_data" not in session_state:
+    session_state.tlfb_data = None
+
+if "visit_data" not in session_state:
+    session_state.visit_data = None
+
 
 # Shared options
 duplicate_options_mapped = {
@@ -163,7 +171,7 @@ def _create_data_conversion_tool():
     sidebar.write(
         "The calculator uses datasets in the long format. Convert your wide-formatted data to the long format."
     )
-    conversion_tool = sidebar.beta_expander("Conversion Tool Settings", False)
+    conversion_tool = sidebar.expander("Conversion Tool Settings", False)
     wide_file = conversion_tool.file_uploader("Wide Formatted Data", type=supported_file_types)
     data_source_type = conversion_tool.radio("Data Source", ["Visit", "TLFB"])
     subject_col_name = conversion_tool.text_input("Subject ID Variable Name", "id")
@@ -188,7 +196,7 @@ def _create_date_masking_tool():
     sidebar.write(
         "Mask the dates in the Visit and TLFB data using an anchor visit or arbitrary date for all subjects"
     )
-    masking_tool = sidebar.beta_expander("Masking Tool Settings", False)
+    masking_tool = sidebar.expander("Masking Tool Settings", False)
     masking_tool.write("Visit Data (Long Format, 3 columns: id, visit, date)")
     visit_file = masking_tool.file_uploader("Upload Visit Data", type=supported_file_types)
     visit_df = _create_df_from_upload(visit_file)
@@ -238,7 +246,7 @@ def _create_additional_visit_dates():
     sidebar.write(
         "Create extra visit dates based on existing visit days"
     )
-    visit_tool = sidebar.beta_expander("Creation Date Settings", True)
+    visit_tool = sidebar.expander("Creation Date Settings", True)
     visit_file = visit_tool.file_uploader("Upload Visit Data", type=supported_file_types, key="visit_tool_file")
     visit_df = _create_df_from_upload(visit_file)
     if (visit_df is not None) and (not visit_df.empty):
@@ -275,6 +283,10 @@ def _load_overview_elements():
                 "[GitHub](https://github.com/ycui1-mda/abstcal) page for more information.")
     st.markdown(f"Current Version of abstcal: __{abstcal_version}__")
     st.markdown(f"Last Update Date: __{update_date}__")
+    st.markdown(f"Citation: Cui, Y., Robinson, J.D., Rymer, R.E., Minnix, J.A., & Cinciripini P.M., 2021 "
+                f"Python package abstcal: An open-source tool for calculating abstinence from timeline followback data. "
+                f"Nicotine & Tobacco Research. Advance online publication. "
+                f"[https://doi.org/10.1093/ntr/ntab083](https://doi.org/10.1093/ntr/ntab083)")
     st.markdown("**Disclaimer**: Not following the steps or variation in your source data may result in incorrect "
                 "abstinence results. Please verify your results for accuracy.")
     st.subheader("Basic Steps:")
@@ -497,7 +509,7 @@ def _load_tlfb_elements():
     else:
         container.write("The TLFB data are shown here after loading.")
 
-    with st.beta_expander("TLFB Data Processing Advanced Configurations"):
+    with st.expander("TLFB Data Processing Advanced Configurations"):
         st.write("1. The TLFB data's date column can use either actual dates or arbitrary day counters. Please specify "
                  "the date data type.")
         tlfb_data_params["use_raw_date"] = st.checkbox(
@@ -784,7 +796,7 @@ def _load_visit_elements():
     else:
         container.write("The Visit data are shown here after loading.")
 
-    with st.beta_expander("Visit Data Processing Advanced Configurations"):
+    with st.expander("Visit Data Processing Advanced Configurations"):
         st.write("1. The TLFB data's date column can use either actual dates or arbitrary day counters. "
                  "Please specify the date data type.")
         visit_data_params['use_raw_date'] = st.checkbox(

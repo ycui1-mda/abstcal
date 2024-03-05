@@ -1,4 +1,4 @@
-__version__ = '0.8'
+__version__ = '0.9'
 
 from abstcal.tlfb_data import TLFBData
 from abstcal.visit_data import VisitData
