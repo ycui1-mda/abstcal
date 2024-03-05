@@ -767,17 +767,17 @@ def _load_visit_elements():
     The dataset should have three columns: __*id*__, __*visit*__, 
     and __*date*__. The id column stores the subject ids, each of which should uniquely 
     identify a study subject. The visit column stores the visits. The date column stores 
-    the dates for the visits.  \n\nid | visit | date \n
-    ------------ | ------------- | -------------\n
-    1000 | 0 | 02/03/2019\n
-    1000 | 1 | 02/10/2019\n
+    the dates for the visits.  \n\nid | visit | date \n\n
+    ------------ | ------------- | -------------\n\n
+    1000 | 0 | 02/03/2019\n\n
+    1000 | 1 | 02/10/2019\n\n
     1000 | 2 | 02/17/2019  \n\n\n\n---
-      \n**The wide format.** 
+      \n\n**The wide format.** 
     The dataset should have the id column and additional columns 
-    with each representing a visit.  \n\nid | v0 | v1 | v2 | v3 | v4 | v5
-    ----- | ----- | ----- | ----- | ----- | ----- | ----- |
-    1000 | 02/03/2019 | 02/10/2019 | 02/17/2019 | 03/09/2019 | 04/07/2019 | 05/06/2019
-    1001 | 02/05/2019 | 02/13/2019 | 02/20/2019 | 03/11/2019 | 04/06/2019 | 05/09/2019""")
+    with each representing a visit.  \n\nid | v0 | v1 | v2 | v3 | v4 | v5\n\n
+    ----- | ----- | ----- | ----- | ----- | ----- | ----- |\n\n
+    1000 | 02/03/2019 | 02/10/2019 | 02/17/2019 | 03/09/2019 | 04/07/2019 | 05/06/2019\n\n
+    1001 | 02/05/2019 | 02/13/2019 | 02/20/2019 | 03/11/2019 | 04/06/2019 | 05/09/2019\n\n""")
     container = st.container()
     uploaded_file = container.file_uploader(
         "Specify the Visit data file on your computer.",
