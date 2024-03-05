@@ -494,7 +494,7 @@ def _load_tlfb_elements():
     1000 | 02/05/2019 | 12
       \n\n
     """)
-    container = st.beta_container()
+    container = st.container()
     uploaded_file = container.file_uploader(
         "Specify the TLFB data file on your computer.",
         ["csv", "txt", "xlsx"]
@@ -648,7 +648,7 @@ def _load_tlfb_elements():
         ***
         """)
         if has_bio_data:
-            bio_container = st.beta_container()
+            bio_container = st.container()
             uploaded_file = bio_container.file_uploader(
                 "Specify the Biochemical data file on your computer.",
                 ["csv", "txt", "xlsx"]
@@ -778,7 +778,7 @@ def _load_visit_elements():
     ----- | ----- | ----- | ----- | ----- | ----- | ----- |
     1000 | 02/03/2019 | 02/10/2019 | 02/17/2019 | 03/09/2019 | 04/07/2019 | 05/06/2019
     1001 | 02/05/2019 | 02/13/2019 | 02/20/2019 | 03/11/2019 | 04/06/2019 | 05/09/2019""")
-    container = st.beta_container()
+    container = st.container()
     uploaded_file = container.file_uploader(
         "Specify the Visit data file on your computer.",
         ["csv", "txt", "xlsx"]
